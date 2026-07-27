@@ -26,17 +26,43 @@ $ leanctl demand export host-metrics > demands/host-metrics.json
 
 ## Install
 
-> **No release is published yet.** Until the first `v*` tag is cut, build from
-> source (below). The download steps are how it will work once a release exists.
+### One-liner (macOS and Linux)
 
-### macOS and Linux — from a release
+```bash
+curl -fsSL https://raw.githubusercontent.com/LeanSignal/lean-cli/main/scripts/install.sh | sh
+```
+
+Detects your OS and architecture, downloads the matching release, verifies its
+checksum, and installs to `/usr/local/bin` — or `~/.local/bin` when that is not
+writable, so it never demands `sudo`. Options: `--version vX.Y.Z`,
+`--bin-dir DIR`, `--no-verify`.
+
+> **Two things must be true before that line works, and neither is yet:**
+>
+> 1. **A release must exist.** No `v*` tag has been cut, so there is nothing to
+>    download. Build from source until then.
+> 2. **The assets must be publicly readable.** The repository is private, so
+>    both `raw.githubusercontent.com` and the release assets currently require a
+>    GitHub credential. The script handles that — it uses the `gh` CLI when you
+>    are logged in, or `GH_TOKEN` — but a *public* one-liner needs the repo to be
+>    public (as `leansignal-agent` is) or the assets mirrored to a public host.
+>
+> Authenticated form, which works as soon as a release exists:
+>
+> ```bash
+> export GH_TOKEN=…   # or: gh auth login
+> curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+>   https://raw.githubusercontent.com/LeanSignal/lean-cli/main/scripts/install.sh | sh
+> ```
+
+### Manual download
 
 Releases carry `leanctl_<version>_<os>_<arch>.tar.gz` for `darwin` and `linux`,
 `amd64` and `arm64`.
 
-The repo is **private**, so release assets need authentication — a plain `curl`
-of the download URL returns a 404. Use the GitHub CLI, logged in as a member of
-the LeanSignal org:
+Because the repo is private, release assets need authentication — a plain `curl`
+of the download URL returns 404, which reads like a missing file rather than an
+auth failure. Use the GitHub CLI, logged in as a member of the LeanSignal org:
 
 ```bash
 # macOS (Apple Silicon: arm64; Intel: amd64) — check with `uname -m`
@@ -75,7 +101,7 @@ cosign verify-blob checksums.txt \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-### macOS and Linux — from source
+### From source
 
 Needs Go 1.25+ and, for SSH cloning, org access.
 
