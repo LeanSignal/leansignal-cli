@@ -1,0 +1,74 @@
+version: 2
+
+project_name: leanctl
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: leanctl
+    main: ./cmd/leanctl
+    binary: leanctl
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/leansignal/lean-cli/internal/build.Version={{ .Version }}
+      - -X github.com/leansignal/lean-cli/internal/build.Commit={{ .FullCommit }}
+      - -X github.com/leansignal/lean-cli/internal/build.Date={{ .Date }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: leanctl
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+# Every published archive is signed, so an install script can verify what it
+# downloaded rather than trusting the transport alone.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: ${artifact}.sig
+    certificate: ${artifact}.pem
+    output: true
+    args:
+      - sign-blob
+      - --yes
+      - --output-signature=${signature}
+      - --output-certificate=${certificate}
+      - ${artifact}
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: LeanSignal
+    name: lean-cli
+  draft: false
+  prerelease: auto

@@ -1,0 +1,193 @@
+package cli
+
+import (
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/spf13/cobra"
+)
+
+// Every command must carry help text and, where it takes arguments, an
+// argument validator — a CLI that accepts stray arguments silently is the
+// classic source of "why did nothing happen".
+func TestCommandTreeIsWellFormed(t *testing.T) {
+	root := NewRootCommand()
+
+	var walk func(*cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		if c.Short == "" {
+			t.Errorf("%q has no short description", c.CommandPath())
+		}
+
+		if !c.HasSubCommands() && c.RunE == nil && c.Run == nil {
+			t.Errorf("%q is a leaf with nothing to run", c.CommandPath())
+		}
+
+		if c.RunE != nil && c.Args == nil && c.Name() != "help" {
+			t.Errorf("%q accepts arguments without validating them", c.CommandPath())
+		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+
+	walk(root)
+}
+
+// A --token flag would put the credential in the process table and in shell
+// history. It must not exist anywhere in the tree.
+func TestNoTokenFlagAnywhere(t *testing.T) {
+	root := NewRootCommand()
+
+	var walk func(*cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		if c.Flags().Lookup("token") != nil {
+			t.Errorf("%q exposes a --token flag; use LEANCTL_TOKEN or auth login", c.CommandPath())
+		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+
+	walk(root)
+}
+
+// Deleting is irreversible, so every delete-shaped command must offer --yes and
+// therefore prompt without it.
+func TestDestructiveCommandsHaveAConfirmationFlag(t *testing.T) {
+	root := NewRootCommand()
+
+	destructive := map[string]bool{"delete": true, "revoke": true}
+
+	var walk func(*cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		if destructive[c.Name()] && c.Flags().Lookup("yes") == nil {
+			t.Errorf("%q deletes without a --yes flag", c.CommandPath())
+		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+
+	walk(root)
+}
+
+// The Stored/Available split is the product's core idea; every query command
+// that can read the agent side must expose it under the same name.
+func TestQueryCommandsExposeAvailable(t *testing.T) {
+	root := NewRootCommand()
+
+	want := []string{
+		"metrics names", "metrics query", "metrics query-range", "metrics series",
+		"logs query", "logs labels", "traces search", "traces get",
+	}
+
+	for _, path := range want {
+		cmd, _, err := root.Find(strings.Split(path, " "))
+		if err != nil {
+			t.Fatalf("finding %q: %v", path, err)
+		}
+
+		if cmd.Flags().Lookup("available") == nil {
+			t.Errorf("%q has no --available flag", path)
+		}
+	}
+}
+
+func TestParseTime(t *testing.T) {
+	t.Run("relative", func(t *testing.T) {
+		got, err := parseTime("now-1h")
+		if err != nil {
+			t.Fatalf("parseTime: %v", err)
+		}
+
+		ts, err := strconv.ParseInt(got, 10, 64)
+		if err != nil {
+			t.Fatalf("result is not a unix timestamp: %q", got)
+		}
+
+		delta := time.Since(time.Unix(ts, 0))
+		if delta < 59*time.Minute || delta > 61*time.Minute {
+			t.Errorf("now-1h resolved to %v ago", delta)
+		}
+	})
+
+	t.Run("rfc3339", func(t *testing.T) {
+		got, err := parseTime("2026-07-27T10:00:00Z")
+		if err != nil {
+			t.Fatalf("parseTime: %v", err)
+		}
+
+		if got != "1785146400" {
+			t.Errorf("got %q", got)
+		}
+	})
+
+	t.Run("empty passes through", func(t *testing.T) {
+		got, err := parseTime("")
+		if err != nil || got != "" {
+			t.Errorf("got %q, %v", got, err)
+		}
+	})
+
+	t.Run("garbage is a usage error", func(t *testing.T) {
+		if _, err := parseTime("last tuesday"); err == nil {
+			t.Error("expected an error")
+		}
+	})
+}
+
+// Label order must be stable so two runs of the same query diff cleanly.
+func TestFormatLabelsIsSorted(t *testing.T) {
+	got := formatLabels(map[string]string{"z": "1", "a": "2", "m": "3"})
+	if got != "{a=2, m=3, z=1}" {
+		t.Errorf("got %q", got)
+	}
+
+	if formatLabels(nil) != "-" {
+		t.Error("an empty label set should render as a dash")
+	}
+}
+
+// The empty-result hint is the CLI's answer to LeanSignal's most confusing
+// behaviour, so it must name both the demand set and the --available escape.
+func TestEmptyStoredHintPointsAtBothSides(t *testing.T) {
+	hint := emptyStoredHint(logSignal, `{job="nginx"}`)
+
+	for _, want := range []string{"demanded", "filter list", "--available"} {
+		if !strings.Contains(hint, want) {
+			t.Errorf("hint is missing %q:\n%s", want, hint)
+		}
+	}
+}
+
+func TestMergeBodyOverlaysFlagsOnAFile(t *testing.T) {
+	merged, err := mergeBody([]byte(`{"name":"from-file","description":"keep"}`),
+		map[string]any{"name": "from-flag"})
+	if err != nil {
+		t.Fatalf("mergeBody: %v", err)
+	}
+
+	got := string(merged)
+	if !strings.Contains(got, `"name":"from-flag"`) {
+		t.Errorf("flag did not win: %s", got)
+	}
+
+	if !strings.Contains(got, `"description":"keep"`) {
+		t.Errorf("file field was dropped: %s", got)
+	}
+}
+
+func TestMergeBodyRejectsAnEmptyRequest(t *testing.T) {
+	if _, err := mergeBody(nil, map[string]any{}); err == nil {
+		t.Error("expected an error when there is nothing to send")
+	}
+}

@@ -1,0 +1,96 @@
+# Mirrors lean-api's linter set so a change moving between the two repos meets
+# the same bar. Differences are noted inline.
+version: "2"
+run:
+  issues-exit-code: 1
+linters:
+  default: none
+  enable:
+    - asciicheck
+    - bodyclose
+    - dogsled
+    - dupl
+    - errcheck
+    - exhaustive
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - nlreturn
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - staticcheck
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - wastedassign
+    - whitespace
+    - wsl_v5
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        # Cobra command constructors pass config/flag structs by value
+        # throughout; converting to pointers would be churn for no benefit.
+        - hugeParam
+        - rangeValCopy
+        - unnamedResult
+        - exitAfterDefer
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    dupl:
+      # The resource commands are deliberately parallel: demand, agent, channel,
+      # and rule each repeat the same list/get/create/update/delete shape. That
+      # symmetry is the point — a reader who knows one knows the rest — so the
+      # threshold sits above a single CRUD block.
+      threshold: 220
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+    rules:
+      - path: _test\.go
+        linters:
+          - dupl
+          - dogsled
+          - unparam
+          - gosec
+          - revive
+          - gocritic
+          - prealloc
+          - errcheck
+      # G101 fires on the token-prefix and env-var-name constants, which are
+      # identifiers rather than secrets.
+      - linters:
+          - gosec
+        text: G101
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

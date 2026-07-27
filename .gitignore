@@ -1,0 +1,12 @@
+bin/
+dist/
+coverage/
+
+# Never commit a credential: the config file holds a personal access token.
+config.yaml
+*.token
+.envrc
+
+.DS_Store
+*.test
+*.out

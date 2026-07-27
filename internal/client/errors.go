@@ -1,0 +1,160 @@
+package client
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/leansignal/lean-cli/internal/config"
+)
+
+// Exit codes. Scripts branch on these, so they are part of the CLI's contract
+// and must not be renumbered.
+const (
+	ExitOK         = 0
+	ExitError      = 1 // generic failure
+	ExitUsage      = 2 // bad flags or arguments
+	ExitAuth       = 3 // 401 / 403
+	ExitNotFound   = 4 // 404
+	ExitValidation = 5 // 422
+	ExitServer     = 6 // 5xx
+	ExitNetwork    = 7 // could not reach the API
+)
+
+// APIError is a non-2xx response from lean-api, decoded from its standard
+// {error, message, details} envelope.
+type APIError struct {
+	Status  int
+	Code    string
+	Message string
+	Details any
+	// LoginURL is set when the API reports an expired browser session. It is
+	// never actionable for a token, and is only surfaced for cookie auth.
+	LoginURL string
+	Method   string
+	Path     string
+}
+
+func (e *APIError) Error() string {
+	msg := e.Message
+	if msg == "" {
+		msg = http.StatusText(e.Status)
+	}
+
+	if e.Code != "" && !strings.EqualFold(e.Code, msg) {
+		return fmt.Sprintf("%s (%s)", msg, e.Code)
+	}
+
+	return msg
+}
+
+// Hint returns an actionable next step for the errors where one exists.
+func (e *APIError) Hint() string {
+	switch {
+	case e.Code == "session_required":
+		return "user and support management is only available in the web app"
+	case e.Code == "insufficient_scope":
+		return "this token is read-only — mint one with the write scope in the web app (Preferences → Access tokens)"
+	case e.Code == "invalid_token", e.Status == http.StatusUnauthorized:
+		return "run 'leanctl auth login --tenant <tenant>' to re-authenticate"
+	case e.Status == http.StatusForbidden:
+		return "your role does not allow this action"
+	default:
+		return ""
+	}
+}
+
+// ExitCode maps an error to the process exit status.
+func ExitCode(err error) int {
+	if err == nil {
+		return ExitOK
+	}
+
+	// A missing credential is an auth problem from a script's point of view:
+	// the fix is the same as for a rejected token.
+	if errors.Is(err, config.ErrNoContext) {
+		return ExitAuth
+	}
+
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		switch {
+		case apiErr.Status == http.StatusUnauthorized, apiErr.Status == http.StatusForbidden:
+			return ExitAuth
+		case apiErr.Status == http.StatusNotFound:
+			return ExitNotFound
+		case apiErr.Status == http.StatusUnprocessableEntity:
+			return ExitValidation
+		case apiErr.Status >= 500:
+			return ExitServer
+		default:
+			return ExitError
+		}
+	}
+
+	var netErr *NetworkError
+	if errors.As(err, &netErr) {
+		return ExitNetwork
+	}
+
+	var usageErr *UsageError
+	if errors.As(err, &usageErr) {
+		return ExitUsage
+	}
+
+	return ExitError
+}
+
+// NetworkError wraps a transport failure — the API was never reached.
+type NetworkError struct {
+	Op  string
+	Err error
+}
+
+func (e *NetworkError) Error() string { return fmt.Sprintf("%s: %v", e.Op, e.Err) }
+func (e *NetworkError) Unwrap() error { return e.Err }
+
+// UsageError is a caller mistake: bad flags, missing arguments, unreadable file.
+type UsageError struct{ Msg string }
+
+func (e *UsageError) Error() string { return e.Msg }
+
+// Usage builds a UsageError.
+func Usage(format string, args ...any) error {
+	return &UsageError{Msg: fmt.Sprintf(format, args...)}
+}
+
+// parseAPIError decodes lean-api's error envelope. Bodies that are not the
+// expected shape (a proxy's HTML error page, say) still produce a usable
+// message rather than an empty one.
+func parseAPIError(status int, method, path string, body []byte) *APIError {
+	e := &APIError{Status: status, Method: method, Path: path}
+
+	var env struct {
+		Error    string `json:"error"`
+		Message  string `json:"message"`
+		Details  any    `json:"details"`
+		LoginURL string `json:"login_url"`
+	}
+
+	if err := json.Unmarshal(body, &env); err == nil {
+		e.Code, e.Message, e.Details, e.LoginURL = env.Error, env.Message, env.Details, env.LoginURL
+	}
+
+	if e.Message == "" {
+		snippet := strings.TrimSpace(string(body))
+		if len(snippet) > 200 {
+			snippet = snippet[:200] + "…"
+		}
+
+		if snippet != "" && !strings.HasPrefix(snippet, "<") {
+			e.Message = snippet
+		} else {
+			e.Message = fmt.Sprintf("HTTP %d from %s %s", status, method, path)
+		}
+	}
+
+	return e
+}
