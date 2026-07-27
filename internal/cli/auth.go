@@ -22,8 +22,9 @@ leanctl authenticates with a personal access token minted in the web app under
 Preferences -> Access tokens. The token carries your identity and role: what you
 can do in the UI is what you can do here.
 
-Mint a token with the "write" scope to create or change anything; a "read" token
-can list and inspect but every mutating call is refused.`,
+Scopes narrow what a token may do, never widen it: "read" (always granted) can
+list and inspect, "write" can create and update, and "write:delete" can delete.
+Your role still decides the rest — a viewer's write token is still read-only.`,
 	}
 
 	cmd.AddCommand(
@@ -381,9 +382,15 @@ func newAuthTokenCommand(f *Factory) *cobra.Command {
 
 The secret is printed once and never again — store it immediately. A token
 inherits your current role and can never exceed it; scopes only narrow it
-further.`,
-		Example: `  leanctl auth tokens create --name laptop --scope read --scope write --expires-in 90d`,
-		Args:    cobra.NoArgs,
+further.
+
+Scopes are read (always granted), write (create and update), and write:delete
+(delete, and it implies write). Deleting is a separate scope because removing a
+demand-set object stops data being demanded, and the purge worker then erases
+it. Write scopes require the editor or admin role.`,
+		Example: `  leanctl auth tokens create --name laptop --scope write --expires-in 90d
+  leanctl auth tokens create --name ci --scope write --scope write:delete`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := cmdContext(cmd)
 			defer cancel()
@@ -430,7 +437,8 @@ further.`,
 
 	createCmd.Flags().StringVar(&tokenName, "name", "", "human-readable token name (required)")
 	createCmd.Flags().StringVar(&expiresIn, "expires-in", "90d", "expiry window, e.g. 30d, 90d, 720h (empty = never)")
-	createCmd.Flags().StringArrayVar(&scopes, "scope", nil, "scope to grant: read, write (repeatable)")
+	createCmd.Flags().StringArrayVar(&scopes, "scope", nil,
+		"scope to grant: read, write, write:delete (repeatable; read is always granted)")
 
 	var yes bool
 

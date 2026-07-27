@@ -44,7 +44,9 @@ leanctl completion bash > /etc/bash_completion.d/leanctl
 ## Authenticate
 
 1. In the web app, go to **Preferences → Access tokens** and mint a token.
-   Give it the **write** scope if the CLI should be able to change anything.
+   Scopes are `read` (always granted), `write` (create and update), and
+   `write:delete` (delete; implies `write`). Write scopes need the editor or
+   admin role.
 2. `leanctl auth login --tenant <your-tenant>` and paste it.
 
 The token is verified against `/auth/me` before anything is written to disk, and
@@ -92,7 +94,7 @@ No stored logs matched.
 The central store holds only demanded telemetry, so this may be a demand gap
 rather than an absence of data. Check both sides:
   leanctl filter list --type log
-  leanctl log query "{job=\"nginx\"}" --available
+  leanctl logs query '{job="nginx"}' --available
 ```
 
 ## Commands

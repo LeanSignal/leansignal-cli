@@ -56,7 +56,8 @@ func (e *APIError) Hint() string {
 	case e.Code == "session_required":
 		return "user and support management is only available in the web app"
 	case e.Code == "insufficient_scope":
-		return "this token is read-only — mint one with the write scope in the web app (Preferences → Access tokens)"
+		return "this token lacks the scope for that action — mint one with 'write'" +
+			" (or 'write:delete' to delete) via 'leanctl auth tokens create'"
 	case e.Code == "invalid_token", e.Status == http.StatusUnauthorized:
 		return "run 'leanctl auth login --tenant <tenant>' to re-authenticate"
 	case e.Status == http.StatusForbidden:

@@ -14,18 +14,35 @@ The design that this CLI implements the client half of lives in
 **`../lean-api/docs/leanctl-design.md`**. The relevant part: lean-api's public API
 is session-cookie-authenticated today, and both auth layers
 (`apimiddleware.RequireSession` and the per-route `guard.*` middleware) read the
-cookie directly. Until the server-side `Authenticate` middleware lands, an `lsp_`
-token authenticates only the `:8081` MCP listener, not `/api/v1/*`.
+cookie directly. Until the server-side `TokenAuth` middleware lands, an `lsp_`
+token authenticates only the `:8081` MCP listener, not `/api/v1/*` — **so nothing
+here works end to end yet.**
 
-Two consequences the CLI already encodes:
+The remaining server work is small, because the MCP write-scope work (also
+2026-07-27) already built the hard parts: `ai.Identity` in context, the scope
+vocabulary, and `ai.Registry.bridge`, which mints a short-lived signed session
+from a PAT and replays the request through the real v1 router. The CLI
+middleware is that same trick applied to real inbound HTTP. See §2.1 of the
+design doc before touching anything on the server side.
+
+Consequences the CLI already encodes:
 
 - **`/api/v1/tenant-admin/*` and `/api/v1/support/*` can never work with a token.**
   `internal/cc.Client.buildURL` injects a `session_id` that control-center
   validates, and a token has no CC session. There are deliberately no `user` or
   `support` commands; the error path expects `403 session_required`.
 - **Scopes narrow, roles decide.** A token carries a role snapshot; the effective
-  permission is role ∩ scope. `insufficient_scope` is handled as its own hint in
-  `client/errors.go`.
+  permission is role ∩ scope. The vocabulary is `read` / `write` / `write:delete`
+  and is **owned by lean-api** (`ai.NormalizeScopes`): `read` is always granted,
+  `write:delete` implies `write`, unknown scopes are rejected at mint, and write
+  scopes need editor/admin. Do not invent scope names here — mirror that list.
+  `insufficient_scope` is handled as its own hint in `client/errors.go`.
+- **Provenance is a display-name suffix, not a column.** lean-api's MCP write
+  bridge tags non-interactive callers by appending `" (MCP)"` to the session
+  display name, which flows into audit entries and `created_by_*`. The planned
+  CLI middleware does the same with `" (CLI)"`. If audit output ever needs a
+  machine-readable actor kind, change it on the server for both paths at once —
+  a CLI-only mechanism would fork a shipped design.
 
 ## Commands
 
