@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 // Every command must carry help text and, where it takes arguments, an
@@ -79,16 +78,17 @@ func TestNoControlCenterSurface(t *testing.T) {
 		}
 
 		// Explaining that something lives in the web app is fine; offering to
-		// reach control-center is not. Only flag help text, which is where a
-		// re-added --cc-url would show up.
-		c.Flags().VisitAll(func(fl *pflag.Flag) {
-			for _, bad := range banned {
-				if strings.Contains(strings.ToLower(fl.Name+" "+fl.Usage), bad) {
-					t.Errorf("%q flag --%s references control-center: %q",
-						c.CommandPath(), fl.Name, fl.Usage)
-				}
+		// reach control-center is not. Only flag help text is checked — that is
+		// where a re-added --cc-url would surface. FlagUsages is used rather
+		// than VisitAll so the test needs no direct pflag dependency.
+		usages := strings.ToLower(c.Flags().FlagUsages())
+
+		for _, bad := range banned {
+			if strings.Contains(usages, bad) {
+				t.Errorf("%q has a flag referencing control-center (%q):\n%s",
+					c.CommandPath(), bad, c.Flags().FlagUsages())
 			}
-		})
+		}
 
 		for _, sub := range c.Commands() {
 			walk(sub)
