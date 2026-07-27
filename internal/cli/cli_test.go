@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Every command must carry help text and, where it takes arguments, an
@@ -49,6 +50,45 @@ func TestNoTokenFlagAnywhere(t *testing.T) {
 		if c.Flags().Lookup("token") != nil {
 			t.Errorf("%q exposes a --token flag; use LEANCTL_TOKEN or auth login", c.CommandPath())
 		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+
+	walk(root)
+}
+
+// leanctl talks to one tenant's lean-api and nothing else. Control-center is
+// not a dependency: it has no CLI-reachable surface (tenant-admin and support
+// need a browser session), and depending on it for tenant resolution would put
+// a second host in the trust path for no gain. This walks the command tree
+// looking for any sign one crept back in.
+func TestNoControlCenterSurface(t *testing.T) {
+	root := NewRootCommand()
+
+	banned := []string{"cc.leansignal.io", "resolve_tenant", "control-center", "control center"}
+	bannedCmd := map[string]bool{"user": true, "users": true, "support": true, "invitation": true,
+		"invitations": true, "tenant-admin": true}
+
+	var walk func(*cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		if bannedCmd[c.Name()] {
+			t.Errorf("%q exposes a control-center-backed surface", c.CommandPath())
+		}
+
+		// Explaining that something lives in the web app is fine; offering to
+		// reach control-center is not. Only flag help text, which is where a
+		// re-added --cc-url would show up.
+		c.Flags().VisitAll(func(fl *pflag.Flag) {
+			for _, bad := range banned {
+				if strings.Contains(strings.ToLower(fl.Name+" "+fl.Usage), bad) {
+					t.Errorf("%q flag --%s references control-center: %q",
+						c.CommandPath(), fl.Name, fl.Usage)
+				}
+			}
+		})
 
 		for _, sub := range c.Commands() {
 			walk(sub)

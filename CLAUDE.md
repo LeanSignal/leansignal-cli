@@ -27,10 +27,25 @@ design doc before touching anything on the server side.
 
 Consequences the CLI already encodes:
 
-- **`/api/v1/tenant-admin/*` and `/api/v1/support/*` can never work with a token.**
-  `internal/cc.Client.buildURL` injects a `session_id` that control-center
-  validates, and a token has no CC session. There are deliberately no `user` or
-  `support` commands; the error path expects `403 session_required`.
+- **leanctl never contacts control-center — not for anything.** One host is
+  contacted: the tenant API in the active context. `TestNoControlCenterSurface`
+  enforces it across the command tree.
+  - `/api/v1/tenant-admin/*` and `/api/v1/support/*` **can never work with a
+    token**: `internal/cc.Client.buildURL` injects a `session_id` that
+    control-center validates, and a token has no CC session. There are no
+    `user`, `invitation`, or `support` commands; if the server ever routes one
+    here anyway, the error path expects `403 session_required`.
+  - **Tenant resolution was removed** (it used to call CC's `/resolve_tenant`,
+    the way the web app does at boot). `auth login` therefore **requires
+    `--api-url`**. The tenant slug is recovered from the host purely to name the
+    context — never as an authorization input.
+  - **`/auth/me` is used but not trusted for tenant data.** lean-api enriches it
+    from CC and, when that call fails, returns session-only fields — the normal
+    case under token auth. `client.Me` maps only `email`/`display_name`/`role`
+    for exactly that reason; do not add `tenant_name` back.
+  - Endpoints where lean-api talks to CC *server-side with its own service key*
+    (channel email delivery, `channel test`) are fine and stay — no user session
+    is involved.
 - **Scopes narrow, roles decide.** A token carries a role snapshot; the effective
   permission is role ∩ scope. The vocabulary is `read` / `write` / `write:delete`
   and is **owned by lean-api** (`ai.NormalizeScopes`): `read` is always granted,
@@ -69,7 +84,7 @@ cmd/leanctl/main.go        os.Exit(cli.Execute())
 internal/build/            version stamped by -ldflags
 internal/cli/              cobra tree, one file per noun
 internal/client/           HTTP client, error envelope, paging, models
-internal/config/           config file, contexts, precedence, tenant resolve
+internal/config/           config file, contexts, flag>env>file precedence
 internal/output/           table / json / yaml / name renderers
 ```
 

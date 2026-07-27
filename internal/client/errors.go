@@ -54,7 +54,7 @@ func (e *APIError) Error() string {
 func (e *APIError) Hint() string {
 	switch {
 	case e.Code == "session_required":
-		return "user and support management is only available in the web app"
+		return "that endpoint needs a browser session and is not part of leanctl — use the web app"
 	case e.Code == "insufficient_scope":
 		return "this token lacks the scope for that action — mint one with 'write'" +
 			" (or 'write:delete' to delete) via 'leanctl auth tokens create'"

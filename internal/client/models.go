@@ -6,15 +6,19 @@ import "time"
 // the fields leanctl renders in tables — `-o json` prints the server's own
 // bytes, so an unmapped field is never lost, only unformatted.
 
-// Me is GET /auth/me.
+// Me is GET /auth/me — the identity the token resolves to.
+//
+// The endpoint also returns tenant_name, tenant_short_name, user_tenants, and
+// the email opt-out flags, all of which lean-api fetches from control-center
+// and omits when that call does not succeed. leanctl deliberately does not map
+// them: it never depends on control-center, and a field that is empty under
+// token auth is worse than no field at all.
 type Me struct {
-	Email           string `json:"email"`
-	DisplayName     string `json:"display_name"`
-	Role            string `json:"role"`
-	TenantName      string `json:"tenant_name"`
-	TenantShortName string `json:"tenant_short_name"`
-	Error           string `json:"error"`
-	ErrorMsg        string `json:"error_msg"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+	Error       string `json:"error"`
+	ErrorMsg    string `json:"error_msg"`
 }
 
 // Demand is a demand record.

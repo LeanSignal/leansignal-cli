@@ -7,7 +7,7 @@ identity and role** — what you can do in the web app is what you can do here, 
 nothing more.
 
 ```console
-$ leanctl auth login --tenant petkopuma
+$ leanctl auth login --api-url https://petkopuma-api.eu11.leansignal.io
 Personal access token: ****
 Logged in to https://petkopuma-api.eu11.leansignal.io as nikola@example.com (admin)
 
@@ -47,10 +47,16 @@ leanctl completion bash > /etc/bash_completion.d/leanctl
    Scopes are `read` (always granted), `write` (create and update), and
    `write:delete` (delete; implies `write`). Write scopes need the editor or
    admin role.
-2. `leanctl auth login --tenant <your-tenant>` and paste it.
+2. `leanctl auth login --api-url https://<tenant>-api.<region>.leansignal.io`
+   and paste it. That URL is the one the web app already talks to; you supply it
+   once, and it is stored in the context.
 
 The token is verified against `/auth/me` before anything is written to disk, and
 stored at `~/.config/leanctl/config.yaml` with mode `0600`.
+
+`leanctl` never contacts control-center. It talks to one tenant's API and
+nothing else, so there is no tenant-slug lookup and no second host in the trust
+path — which is why the endpoint is given rather than resolved.
 
 In CI, skip login entirely:
 
@@ -65,12 +71,15 @@ leanctl demand import --file demands/host-metrics.json --dry-run
 Contexts work the way kubectl's do:
 
 ```bash
-leanctl auth login --tenant petkopuma      # saves a context
-leanctl auth login --tenant lean           # and another
+leanctl auth login --api-url https://petkopuma-api.eu11.leansignal.io   # saves a context
+leanctl auth login --api-url https://lean-api.eu11.leansignal.io        # and another
 leanctl context list
 leanctl context use lean
 leanctl demand list --context petkopuma    # or override per command
 ```
+
+The context is named after the tenant slug recovered from the host; pass
+`--name` to call it something else.
 
 ## Stored vs Available
 
@@ -119,9 +128,10 @@ rather than an absence of data. Check both sides:
 | `settings` | `get`, `set` (admin) |
 | `search` | find anything by name |
 
-User and support management stay in the web app: control-center validates a
-browser session for those, which a token does not carry. `leanctl` reports that
-plainly instead of failing obscurely.
+**User management, invitations, and support cases are not here, by design.**
+Those live in control-center and need a real browser session, which a token does
+not carry — so `leanctl` has no commands for them rather than commands that
+cannot work. Use the web app.
 
 Run `leanctl <command> --help` for flags and examples.
 
@@ -178,11 +188,9 @@ Precedence: **flags → environment → config file**.
 |---|---|
 | `LEANCTL_TOKEN` | personal access token |
 | `LEANCTL_API_URL` | tenant API origin |
-| `LEANCTL_TENANT` | tenant slug |
 | `LEANCTL_CONTEXT` | context to use |
 | `LEANCTL_OUTPUT` | default output format |
 | `LEANCTL_CONFIG` | config file path |
-| `LEANCTL_CC_URL` | control-center base URL |
 | `NO_COLOR` | disable colour |
 
 ## Security
@@ -197,6 +205,8 @@ Precedence: **flags → environment → config file**.
 - TLS 1.2 is the floor. There is no flag to skip certificate verification.
 - `leanctl auth logout --revoke` revokes the token server-side as well as
   removing it locally.
+- Exactly one host is ever contacted: the tenant API you configured. No
+  telemetry, no update check, no control-center call.
 - Destructive commands prompt, and refuse to run unattended without `--yes`.
 
 ## Development

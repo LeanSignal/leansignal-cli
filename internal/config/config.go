@@ -63,7 +63,6 @@ func (f *File) Path() string { return f.path }
 type Overrides struct {
 	ConfigPath  string
 	ContextName string
-	Tenant      string
 	APIURL      string
 	Token       string
 	Output      string
@@ -88,7 +87,8 @@ type Settings struct {
 
 // ErrNoContext means no credential could be resolved from flags, env, or file.
 var ErrNoContext = errors.New(
-	"no context configured — run 'leanctl auth login --tenant <tenant>' or set LEANCTL_TOKEN and LEANCTL_API_URL")
+	"no context configured — run 'leanctl auth login --api-url <tenant-api-url>'" +
+		" or set LEANCTL_TOKEN and LEANCTL_API_URL")
 
 // DefaultPath is $XDG_CONFIG_HOME/leanctl/config.yaml, falling back to
 // ~/.config/leanctl/config.yaml.
@@ -219,7 +219,6 @@ func Resolve(o Overrides) (*Settings, error) {
 
 	s := &Settings{
 		ContextName: firstNonEmpty(o.ContextName, v.GetString("context"), file.CurrentContext),
-		Tenant:      firstNonEmpty(o.Tenant, v.GetString("tenant")),
 		APIURL:      firstNonEmpty(o.APIURL, v.GetString("api_url")),
 		Token:       firstNonEmpty(o.Token, v.GetString("token")),
 		Output:      firstNonEmpty(o.Output, v.GetString("output"), "table"),
@@ -235,7 +234,7 @@ func Resolve(o Overrides) (*Settings, error) {
 
 	// Fill the gaps from the selected context.
 	if ctx, ok := file.Contexts[s.ContextName]; ok && ctx != nil {
-		s.Tenant = firstNonEmpty(s.Tenant, ctx.Tenant)
+		s.Tenant = ctx.Tenant
 		s.APIURL = firstNonEmpty(s.APIURL, ctx.APIURL)
 		s.Token = firstNonEmpty(s.Token, ctx.Token)
 	} else if s.ContextName != "" && o.ContextName != "" {

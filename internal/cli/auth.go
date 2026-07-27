@@ -2,7 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"os"
+	"net/url"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -41,21 +41,25 @@ func newAuthLoginCommand(f *Factory) *cobra.Command {
 	var (
 		contextName string
 		tokenStdin  bool
-		ccURL       string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Store a personal access token for a tenant",
-		Long: `Resolve a tenant's API endpoint, verify a personal access token against it,
-and save both as a named context.
+		Long: `Verify a personal access token against a tenant's API and save both as a
+named context.
+
+--api-url is required. leanctl talks to one tenant's API and nothing else, so
+it does not ask control-center to resolve a tenant slug to an endpoint. The URL
+is the one the web app uses, visible in its address bar as <tenant>-api.<region>,
+and you only supply it once — it is stored in the context.
 
 The token is read from a no-echo prompt by default. In CI, either pipe it in
 with --token-stdin or skip login entirely and set LEANCTL_TOKEN together with
 LEANCTL_API_URL.`,
-		Example: `  leanctl auth login --tenant petkopuma
-  cat token.txt | leanctl auth login --tenant petkopuma --token-stdin
-  leanctl auth login --tenant dev --api-url http://localhost:8080`,
+		Example: `  leanctl auth login --api-url https://petkopuma-api.eu11.leansignal.io
+  cat token.txt | leanctl auth login --api-url https://petkopuma-api.eu11.leansignal.io --token-stdin
+  leanctl auth login --api-url http://localhost:8080 --name dev`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := cmdContext(cmd)
@@ -66,22 +70,11 @@ LEANCTL_API_URL.`,
 				return err
 			}
 
-			tenant, apiURL := settings.Tenant, settings.APIURL
-
-			if tenant == "" && apiURL == "" {
-				return client.Usage("--tenant is required (or pass --api-url directly)")
-			}
+			apiURL := settings.APIURL
 
 			if apiURL == "" {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Resolving tenant %q…\n", tenant)
-
-				apiURL, err = config.ResolveTenant(ctx,
-					firstNonEmpty(ccURL, os.Getenv("LEANCTL_CC_URL"), config.DefaultCCBaseURL),
-					os.Getenv("LEANCTL_RESOLVE_TOKEN"),
-					tenant, settings.Timeout)
-				if err != nil {
-					return err
-				}
+				return client.Usage(
+					"--api-url is required, e.g. --api-url https://<tenant>-api.eu11.leansignal.io")
 			}
 
 			token, err := readLoginToken(tokenStdin, settings.Token)
@@ -107,18 +100,20 @@ LEANCTL_API_URL.`,
 				return err
 			}
 
-			name := contextName
-			if name == "" {
-				name = firstNonEmpty(tenant, me.TenantShortName, me.TenantName)
-			}
+			// The tenant label is derived locally, never from the response:
+			// /auth/me's tenant fields come from control-center, and the server
+			// returns them empty whenever that call does not succeed — which is
+			// the normal case for a token-authenticated session.
+			tenant := tenantFromAPIURL(probe.APIURL)
 
+			name := firstNonEmpty(contextName, tenant)
 			if name == "" {
-				return client.Usage("could not derive a context name; pass --context")
+				return client.Usage("could not derive a context name; pass --name")
 			}
 
 			file := settings.File
 			file.Contexts[name] = &config.Context{
-				Tenant: firstNonEmpty(tenant, me.TenantShortName, me.TenantName),
+				Tenant: tenant,
 				APIURL: probe.APIURL,
 				Token:  token,
 				User:   me.Email,
@@ -138,13 +133,30 @@ LEANCTL_API_URL.`,
 	}
 
 	fs := cmd.Flags()
-	// The endpoint comes from the global --tenant / --api-url flags; --name is
-	// what the saved context is called (the global --context selects one).
-	fs.StringVar(&contextName, "name", "", "name for the saved context (default: tenant slug)")
+	// The endpoint comes from the global --api-url flag; --name is what the
+	// saved context is called (the global --context selects one).
+	fs.StringVar(&contextName, "name", "", "name for the saved context (default: the tenant slug)")
 	fs.BoolVar(&tokenStdin, "token-stdin", false, "read the token from stdin instead of prompting")
-	fs.StringVar(&ccURL, "cc-url", "", "control-center base URL (default "+config.DefaultCCBaseURL+")")
 
 	return cmd
+}
+
+// tenantFromAPIURL recovers the tenant slug from a host like
+// "petkopuma-api.eu11.leansignal.io". It is a convenience for naming the
+// context, never an authorization input — the server decides what the token
+// may do. An unrecognised host simply yields "", and --name covers that.
+func tenantFromAPIURL(apiURL string) string {
+	u, err := url.Parse(apiURL)
+	if err != nil {
+		return ""
+	}
+
+	host, _, found := strings.Cut(u.Hostname(), ".")
+	if !found {
+		return ""
+	}
+
+	return strings.TrimSuffix(host, "-api")
 }
 
 func readLoginToken(fromStdin bool, envToken string) (string, error) {
@@ -303,7 +315,7 @@ func newAuthStatusCommand(f *Factory) *cobra.Command {
 				t := output.NewTable("FIELD", "VALUE")
 				t.Add("context", settings.ContextName)
 				t.Add("api", api.BaseURL())
-				t.Add("tenant", firstNonEmpty(me.TenantShortName, me.TenantName, settings.Tenant))
+				t.Add("tenant", settings.Tenant)
 				t.Add("user", me.Email)
 				t.Add("role", me.Role)
 				t.Add("token", maskToken(settings.Token))

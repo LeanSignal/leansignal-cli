@@ -146,7 +146,6 @@ metrics and ~1h for logs and traces).`,
 	p.StringVar(&f.overrides.ConfigPath, "config", "",
 		"config file (default "+config.DefaultPath()+")")
 	p.StringVar(&f.overrides.ContextName, "context", "", "context to use (default: current_context)")
-	p.StringVar(&f.overrides.Tenant, "tenant", "", "tenant slug (overrides the context)")
 	p.StringVar(&f.overrides.APIURL, "api-url", "", "tenant API origin (overrides the context)")
 	p.StringVarP(&f.overrides.Output, "output", "o", "",
 		"output format: "+joinFormats())
