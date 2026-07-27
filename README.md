@@ -26,20 +26,98 @@ $ leanctl demand export host-metrics > demands/host-metrics.json
 
 ## Install
 
-Download a binary from [Releases](https://github.com/LeanSignal/lean-cli/releases),
-or build from source:
+> **No release is published yet.** Until the first `v*` tag is cut, build from
+> source (below). The download steps are how it will work once a release exists.
+
+### macOS and Linux — from a release
+
+Releases carry `leanctl_<version>_<os>_<arch>.tar.gz` for `darwin` and `linux`,
+`amd64` and `arm64`.
+
+The repo is **private**, so release assets need authentication — a plain `curl`
+of the download URL returns a 404. Use the GitHub CLI, logged in as a member of
+the LeanSignal org:
+
+```bash
+# macOS (Apple Silicon: arm64; Intel: amd64) — check with `uname -m`
+gh release download --repo LeanSignal/lean-cli \
+  --pattern 'leanctl_*_darwin_arm64.tar.gz'
+
+# Linux
+gh release download --repo LeanSignal/lean-cli \
+  --pattern 'leanctl_*_linux_amd64.tar.gz'
+
+tar -xzf leanctl_*.tar.gz
+sudo install -m 0755 leanctl /usr/local/bin/leanctl
+leanctl version
+```
+
+Without `sudo`, put it anywhere on your `PATH` instead:
+`install -m 0755 leanctl ~/.local/bin/leanctl`.
+
+**macOS:** the binaries are signed but not notarized, so a build fetched through
+a browser is quarantined and Gatekeeper will refuse it. `gh release download`
+does not set that flag; if you did download it another way, clear it with
+`xattr -d com.apple.quarantine leanctl`.
+
+**Verifying the download** (optional). Checksums are signed with cosign
+keylessly, so no key is needed:
+
+```bash
+gh release download --repo LeanSignal/lean-cli \
+  --pattern 'checksums.txt*' --pattern 'leanctl_*_darwin_arm64.tar.gz'
+
+shasum -a 256 -c checksums.txt --ignore-missing   # `sha256sum -c` on Linux
+
+cosign verify-blob checksums.txt \
+  --signature checksums.txt.sig --certificate checksums.txt.pem \
+  --certificate-identity-regexp 'https://github.com/LeanSignal/lean-cli/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+### macOS and Linux — from source
+
+Needs Go 1.25+ and, for SSH cloning, org access.
 
 ```bash
 git clone git@github.com:LeanSignal/lean-cli.git
-cd lean-cli && make install
+cd lean-cli
+make install          # -> $GOBIN, or $(go env GOPATH)/bin
+leanctl version
 ```
 
-Shell completion:
+`make install` does not touch your `PATH`. If `leanctl: command not found`
+follows, add Go's bin directory:
 
 ```bash
-leanctl completion zsh > "${fpath[1]}/_leanctl"
-leanctl completion bash > /etc/bash_completion.d/leanctl
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc   # ~/.bashrc on Linux
 ```
+
+`make build` instead drops the binary in `./bin/leanctl` without installing.
+
+### Shell completion
+
+```bash
+# zsh (macOS default)
+leanctl completion zsh > "${fpath[1]}/_leanctl"
+
+# bash — Linux
+leanctl completion bash | sudo tee /etc/bash_completion.d/leanctl >/dev/null
+
+# bash — macOS with Homebrew's bash-completion@2
+leanctl completion bash > "$(brew --prefix)/etc/bash_completion.d/leanctl"
+
+# fish
+leanctl completion fish > ~/.config/fish/completions/leanctl.fish
+```
+
+Start a new shell afterwards.
+
+### Upgrading and removing
+
+Repeat the install; it overwrites in place. To remove, delete the binary, the
+completion file, and `~/.config/leanctl/` (which holds your token — revoke it
+first with `leanctl auth logout --revoke`).
 
 ## Authenticate
 
