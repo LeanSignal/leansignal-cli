@@ -43,6 +43,10 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: golangci/golangci-lint-action@v6
+      # v8 is the first action release that installs golangci-lint v2, which
+      # this repo's `version: "2"` config needs. Pin the linter itself too:
+      # `latest` on the v6 action resolved to a v1 build compiled with Go 1.24,
+      # which refuses a go.mod targeting 1.25.
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.12.2
