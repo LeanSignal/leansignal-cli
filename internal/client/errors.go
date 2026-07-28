@@ -53,13 +53,23 @@ func (e *APIError) Error() string {
 // Hint returns an actionable next step for the errors where one exists.
 func (e *APIError) Hint() string {
 	switch {
+	// session_expired is the API's *cookie* rejection: it means the server
+	// evaluated the request as a browser one and found no session. Against a
+	// bearer token that is not a stale credential, it is a server that does not
+	// accept tokens on this endpoint — so telling the user to log in again would
+	// send them round a loop that cannot terminate.
+	case e.Code == "session_expired":
+		return "this API answered as if no browser session was present, which means it does not yet" +
+			" accept personal access tokens — the token auth middleware is not deployed on this tenant." +
+			" Re-running 'auth login' will not help"
 	case e.Code == "session_required":
 		return "that endpoint needs a browser session and is not part of leanctl — use the web app"
 	case e.Code == "insufficient_scope":
 		return "this token lacks the scope for that action — mint one with 'write'" +
 			" (or 'write:delete' to delete) via 'leanctl auth tokens create'"
 	case e.Code == "invalid_token", e.Status == http.StatusUnauthorized:
-		return "run 'leanctl auth login --tenant <tenant>' to re-authenticate"
+		return "the token was rejected — mint a new one in the web app, then" +
+			" 'leanctl auth login --api-url <tenant-api-url>'"
 	case e.Status == http.StatusForbidden:
 		return "your role does not allow this action"
 	default:
@@ -142,6 +152,13 @@ func parseAPIError(status int, method, path string, body []byte) *APIError {
 
 	if err := json.Unmarshal(body, &env); err == nil {
 		e.Code, e.Message, e.Details, e.LoginURL = env.Error, env.Message, env.Details, env.LoginURL
+	}
+
+	// Some envelopes carry a code and no message — session_expired is
+	// {error, login_url}. Rendering the raw JSON at the user was worse than
+	// saying nothing, so derive a sentence from the code instead.
+	if e.Message == "" && e.Code != "" {
+		e.Message = strings.ReplaceAll(e.Code, "_", " ")
 	}
 
 	if e.Message == "" {
