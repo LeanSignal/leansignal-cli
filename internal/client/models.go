@@ -1,6 +1,9 @@
 package client
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // The structs below mirror lean-api's read DTOs. They deliberately carry only
 // the fields leanctl renders in tables — `-o json` prints the server's own
@@ -54,6 +57,70 @@ type Agent struct {
 	LastTimeSeen           *time.Time `json:"last_time_seen"`
 	DemandLastUpdate       *time.Time `json:"demand_last_update"`
 	CreatedAt              time.Time  `json:"created_at"`
+}
+
+// AgentConfigFile is one collector-config source on the agent host.
+type AgentConfigFile struct {
+	Path string `json:"path"`
+	// Content is verbatim and unresolved: ${env:...} / ${leansignal:...}
+	// references are NOT expanded, so referenced secrets never appear here.
+	Content  string `json:"content"`
+	Writable bool   `json:"writable"`
+	Error    string `json:"error,omitempty"`
+}
+
+// AgentConfig is the agent's current collector configuration, read live over
+// the control stream (GET /agent/config/{id}).
+type AgentConfig struct {
+	// Files are the sources in --config order; later ones override earlier.
+	Files []AgentConfigFile `json:"files"`
+	// PrimaryPath is the file a write targets when it names none.
+	PrimaryPath string `json:"primary_path"`
+	// WriteEnabled reports whether the agent accepts remote config writes.
+	WriteEnabled bool   `json:"write_enabled"`
+	Error        string `json:"error,omitempty"`
+}
+
+// File returns the source at path, or nil when the agent has no such source.
+func (c AgentConfig) File(path string) *AgentConfigFile {
+	for i := range c.Files {
+		if c.Files[i].Path == path {
+			return &c.Files[i]
+		}
+	}
+
+	return nil
+}
+
+// Paths lists the known config sources, for an error that has to tell the user
+// what they could have asked for.
+func (c AgentConfig) Paths() string {
+	out := make([]string, 0, len(c.Files))
+	for _, f := range c.Files {
+		out = append(out, f.Path)
+	}
+
+	if len(out) == 0 {
+		return "(none)"
+	}
+
+	return strings.Join(out, ", ")
+}
+
+// AgentConfigUpdate is the body of PUT /agent/config/{id}.
+type AgentConfigUpdate struct {
+	// Path selects the source to write; empty means the agent's primary.
+	Path    string `json:"path,omitempty"`
+	Content string `json:"content"`
+}
+
+// AgentConfigUpdateResult is the outcome of a config write. Message is the
+// agent's own account — on a rejection it carries the validator's complaint and
+// is meant to be shown verbatim.
+type AgentConfigUpdateResult struct {
+	Applied bool   `json:"applied"`
+	Message string `json:"message"`
+	Path    string `json:"path"`
 }
 
 // AlertRule is an alert rule record.

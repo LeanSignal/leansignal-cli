@@ -155,6 +155,15 @@ and re-cases keys. `Resolve` applies flag → env → file precedence.
   dashboards have too many fields for flags alone, so `get -o json` → edit →
   `update -f` is the intended loop. Convenience flags cover the common fields and
   override the file.
+- **`agent config` is the only command that touches a host.** Everything else
+  reads or writes lean-api's database; `GET/PUT /api/v1/agent/config/{id}`
+  (admin-only, added to lean-api 2026-07-27) tunnels down the gRPC control
+  stream to the connected agent. Validation belongs to the **agent**, not here:
+  it parses the YAML and dry-runs the merged collector config, keeps a `.bak`,
+  writes atomically, and reloads. So `readRaw` deliberately does not validate —
+  a second, weaker check here would only produce misleading errors. A rejected
+  write comes back `applied:false` with the validator's message, which the CLI
+  surfaces verbatim as a 422-shaped error (exit 5) rather than a success.
 - **Proxy paths are exact.** lean-api allow-lists what may reach Loki and Tempo
   (`isAllowedLokiPath`, `isAllowedTempoPath` — GET only, read paths only). Loki's
   `/tail` is excluded because it upgrades to a WebSocket, which is why there is no

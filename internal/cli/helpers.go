@@ -210,6 +210,36 @@ func readBody(path string) ([]byte, error) {
 	return raw, nil
 }
 
+// readRaw loads a file verbatim, for payloads that are not JSON — the agent's
+// collector config is YAML, and validating it here would only duplicate (badly)
+// the real check the agent performs before writing.
+func readRaw(path string) ([]byte, error) {
+	if path == "" {
+		return nil, client.Usage("--file is required (use '-' to read stdin)")
+	}
+
+	var (
+		raw []byte
+		err error
+	)
+
+	if path == "-" {
+		raw, err = io.ReadAll(io.LimitReader(os.Stdin, 32<<20))
+	} else {
+		raw, err = os.ReadFile(path)
+	}
+
+	if err != nil {
+		return nil, client.Usage("reading %s: %v", displayPath(path), err)
+	}
+
+	if strings.TrimSpace(string(raw)) == "" {
+		return nil, client.Usage("%s is empty", displayPath(path))
+	}
+
+	return raw, nil
+}
+
 func displayPath(p string) string {
 	if p == "-" {
 		return "stdin"

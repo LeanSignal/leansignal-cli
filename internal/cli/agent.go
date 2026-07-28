@@ -20,8 +20,10 @@ It dials out to LeanSignal over a single long-lived gRPC stream, keeps full
 fidelity locally, and forwards only the demanded subset. Exactly one agent may
 be connected per tenant.
 
-These commands manage the agent records, not the agents themselves — installing
-and restarting an agent happens on its host.`,
+Most of these manage the agent record in LeanSignal, not the process — installing
+and restarting an agent happens on its host. The exception is 'agent config',
+which reads and rewrites the collector configuration on the host itself, over the
+agent's own control stream.`,
 	}
 
 	cmd.AddCommand(
@@ -31,6 +33,7 @@ and restarting an agent happens on its host.`,
 		newAgentUpdateCommand(f),
 		newAgentDeleteCommand(f),
 		newAgentDiagnoseCommand(f),
+		newAgentConfigCommand(f),
 	)
 
 	return cmd

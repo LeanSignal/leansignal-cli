@@ -218,7 +218,7 @@ rather than an absence of data. Check both sides:
 | `context` | `list`, `use`, `delete`, `current` |
 | `demand` | `list`, `get`, `create`, `update`, `delete`, `export`, `import` |
 | `dashboard` | `list`, `get`, `apply`, `delete`, `versions` |
-| `agent` | `list`, `get`, `create`, `update`, `delete`, `diagnose` |
+| `agent` | `list`, `get`, `create`, `update`, `delete`, `diagnose`, `config get\|apply` |
 | `alert` | `list`, `get`, `create`, `update`, `delete`, `pause`, `resume`, `mute`, `unmute`, `test` |
 | `channel` | `list`, `get`, `create`, `update`, `delete`, `test` |
 | `synthetic` | `list`, `get`, `create`, `update`, `delete`, `pause`, `resume`, `test`, `results` |
@@ -267,6 +267,24 @@ empty for pipelines. Colour turns itself off when stdout is not a terminal or
 | 5 | validation (422) |
 | 6 | server error (5xx) |
 | 7 | the API could not be reached |
+
+## Editing an agent's collector config
+
+`agent config` reaches the collector configuration on the agent host itself,
+over the agent's control stream — admin role, connected agent:
+
+```bash
+leanctl agent config get lsh                                     # what sources exist
+leanctl agent config get lsh --path /etc/leansignal-agent/config.yaml > c.yaml
+$EDITOR c.yaml
+leanctl agent config apply lsh --file c.yaml
+```
+
+The **agent** validates the write — YAML parse plus a full collector dry-run of
+the merged config — and applies it only if it passes: previous contents kept as
+`<path>.bak`, atomic write, then reload. A rejected config changes nothing on the
+host and exits 5 with the validator's own complaint. Values stay unresolved, so
+`${env:...}` references are never expanded into the output.
 
 ## Demands in git
 
