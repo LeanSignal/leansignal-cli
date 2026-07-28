@@ -20,8 +20,11 @@ type Me struct {
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
-	Error       string `json:"error"`
-	ErrorMsg    string `json:"error_msg"`
+	// Error is a BOOLEAN on the wire, not a string, and it is present on every
+	// response because the field carries no omitempty — a success sends
+	// "error": false. Typing it as a string made every login fail to decode.
+	Error    bool   `json:"error"`
+	ErrorMsg string `json:"error_msg"`
 }
 
 // Demand is a demand record.

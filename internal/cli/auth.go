@@ -100,6 +100,18 @@ LEANCTL_API_URL.`,
 				return err
 			}
 
+			// /auth/me answers 200 with error:true rather than a status code
+			// when it cannot establish an identity, so a decode alone is not
+			// proof of a working token.
+			if me.Error || me.Email == "" {
+				msg := me.ErrorMsg
+				if msg == "" {
+					msg = "the API accepted the request but returned no identity"
+				}
+
+				return client.Usage("could not verify the token: %s", msg)
+			}
+
 			// The tenant label is derived locally, never from the response:
 			// /auth/me's tenant fields come from control-center, and the server
 			// returns them empty whenever that call does not succeed — which is
