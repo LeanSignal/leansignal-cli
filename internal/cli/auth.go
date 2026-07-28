@@ -65,100 +65,9 @@ LEANCTL_API_URL.`,
   leanctl auth login --api-url http://localhost:8080 --name dev`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx, cancel := cmdContext(cmd)
-			defer cancel()
-
-			settings, err := f.Settings()
-			if err != nil {
-				return err
-			}
-
-			// Explicit flag/env only — settings.APIURL may be back-filled from
-			// the CURRENT context, which is the tenant being switched away from.
-			apiURL := strings.TrimRight(f.explicitAPIURL(), "/")
-			resolved := false
-
-			switch {
-			case tenant != "" && apiURL == "":
-				fmt.Fprintf(cmd.ErrOrStderr(), "Resolving tenant %q…\n", tenant)
-
-				apiURL, err = config.ResolveTenant(ctx, tenant, settings.Timeout)
-				if err != nil {
-					return err
-				}
-
-				resolved = true
-			case apiURL == "":
-				return client.Usage(
-					"pass --tenant <slug> (resolves the endpoint) or --api-url <url> (pins one)")
-			}
-
-			token, err := readLoginToken(tokenStdin, f.explicitToken())
-			if err != nil {
-				return err
-			}
-
-			if !strings.HasPrefix(token, "lsp_") {
-				return client.Usage(
-					"that does not look like a LeanSignal access token (expected an lsp_ prefix)")
-			}
-
-			// Verify before saving, so a mistyped token never lands on disk.
-			probe := &config.Settings{APIURL: strings.TrimRight(apiURL, "/"), Token: token, Timeout: settings.Timeout}
-
-			api, err := client.New(probe, "leanctl-login")
-			if err != nil {
-				return err
-			}
-
-			var me client.Me
-			if _, err := api.GetInto(ctx, "/auth/me", nil, &me); err != nil {
-				return err
-			}
-
-			// /auth/me answers 200 with error:true rather than a status code
-			// when it cannot establish an identity, so a decode alone is not
-			// proof of a working token.
-			if me.Error || me.Email == "" {
-				msg := me.ErrorMsg
-				if msg == "" {
-					msg = "the API accepted the request but returned no identity"
-				}
-
-				return client.Usage("could not verify the token: %s", msg)
-			}
-
-			// Without --tenant, a display label is recovered from the pinned
-			// host. Never from /auth/me: its tenant fields come from
-			// control-center and are empty for a token-authenticated session.
-			if tenant == "" {
-				tenant = tenantFromAPIURL(probe.APIURL)
-			}
-
-			name := firstNonEmpty(contextName, tenant)
-			if name == "" {
-				return client.Usage("could not derive a context name; pass --name")
-			}
-
-			file := settings.File
-			file.Contexts[name] = &config.Context{
-				Tenant:  tenant,
-				APIURL:  probe.APIURL,
-				Resolve: resolved,
-				Token:   token,
-				User:    me.Email,
-				Role:    me.Role,
-			}
-			file.CurrentContext = name
-
-			if err := file.Save(); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(cmd.OutOrStdout(), "Logged in to %s as %s (%s)\n", probe.APIURL, me.Email, me.Role)
-			fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved to %s\n", name, file.Path())
-
-			return nil
+			return saveProfile(cmd, f, profileSpec{
+				Tenant: tenant, Name: contextName, TokenStdin: tokenStdin, MakeCurrent: true,
+			})
 		},
 	}
 
@@ -169,6 +78,129 @@ LEANCTL_API_URL.`,
 	fs.BoolVar(&tokenStdin, "token-stdin", false, "read the token from stdin instead of prompting")
 
 	return cmd
+}
+
+// profileSpec is one profile-write request, shared by `auth login` and
+// `profile add`. The two differ in exactly one way: login switches the current
+// profile, add leaves it alone (unless there is none yet).
+type profileSpec struct {
+	Tenant      string
+	Name        string
+	TokenStdin  bool
+	MakeCurrent bool
+}
+
+// saveProfile resolves (or pins) the endpoint, reads and verifies the token,
+// and upserts ONE profile. The write is corruption-proof by construction: the
+// whole file is parsed, a single entry is replaced, and config.File.Save
+// writes to a temp file and renames — other profiles cannot be lost or torn.
+func saveProfile(cmd *cobra.Command, f *Factory, spec profileSpec) error {
+	ctx, cancel := cmdContext(cmd)
+	defer cancel()
+
+	settings, err := f.Settings()
+	if err != nil {
+		return err
+	}
+
+	// Explicit flag/env only — settings.APIURL may be back-filled from
+	// the CURRENT context, which is the tenant being switched away from.
+	apiURL := strings.TrimRight(f.explicitAPIURL(), "/")
+	resolved := false
+
+	switch {
+	case spec.Tenant != "" && apiURL == "":
+		fmt.Fprintf(cmd.ErrOrStderr(), "Resolving tenant %q…\n", spec.Tenant)
+
+		apiURL, err = config.ResolveTenant(ctx, spec.Tenant, settings.Timeout)
+		if err != nil {
+			return err
+		}
+
+		resolved = true
+	case apiURL == "":
+		return client.Usage(
+			"pass --tenant <slug> (resolves the endpoint) or --api-url <url> (pins one)")
+	}
+
+	token, err := readLoginToken(spec.TokenStdin, f.explicitToken())
+	if err != nil {
+		return err
+	}
+
+	if !strings.HasPrefix(token, "lsp_") {
+		return client.Usage(
+			"that does not look like a LeanSignal access token (expected an lsp_ prefix)")
+	}
+
+	// Verify before saving, so a mistyped token never lands on disk.
+	probe := &config.Settings{APIURL: strings.TrimRight(apiURL, "/"), Token: token, Timeout: settings.Timeout}
+
+	api, err := client.New(probe, "leanctl-login")
+	if err != nil {
+		return err
+	}
+
+	var me client.Me
+	if _, err := api.GetInto(ctx, "/auth/me", nil, &me); err != nil {
+		return err
+	}
+
+	// /auth/me answers 200 with error:true rather than a status code
+	// when it cannot establish an identity, so a decode alone is not
+	// proof of a working token.
+	if me.Error || me.Email == "" {
+		msg := me.ErrorMsg
+		if msg == "" {
+			msg = "the API accepted the request but returned no identity"
+		}
+
+		return client.Usage("could not verify the token: %s", msg)
+	}
+
+	// Without --tenant, a display label is recovered from the pinned
+	// host. Never from /auth/me: its tenant fields come from
+	// control-center and are empty for a token-authenticated session.
+	tenant := spec.Tenant
+	if tenant == "" {
+		tenant = tenantFromAPIURL(probe.APIURL)
+	}
+
+	name := firstNonEmpty(spec.Name, tenant)
+	if name == "" {
+		return client.Usage("could not derive a context name; pass --name")
+	}
+
+	file := settings.File
+	file.Contexts[name] = &config.Context{
+		Tenant:  tenant,
+		APIURL:  probe.APIURL,
+		Resolve: resolved,
+		Token:   token,
+		User:    me.Email,
+		Role:    me.Role,
+	}
+
+	// `profile add` deliberately does not steal the default: adding a second
+	// tenant must not silently repoint every later bare command at it.
+	if spec.MakeCurrent || file.CurrentContext == "" {
+		file.CurrentContext = name
+	}
+
+	if err := file.Save(); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Logged in to %s as %s (%s)\n", probe.APIURL, me.Email, me.Role)
+
+	if file.CurrentContext == name {
+		fmt.Fprintf(cmd.OutOrStdout(), "Profile %q saved to %s (now current)\n", name, file.Path())
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Profile %q saved to %s (current stays %q)\n",
+			name, file.Path(), file.CurrentContext)
+	}
+
+	return nil
 }
 
 // tenantFromAPIURL recovers the tenant slug from a host like

@@ -223,7 +223,40 @@ contexts (created with --api-url) are not resolvable — log in again to re-pin.
 		},
 	}
 
-	cmd.AddCommand(listCmd, useCmd, deleteCmd, currentCmd, refreshCmd)
+	var (
+		addTenant  string
+		addName    string
+		tokenStdin bool
+	)
+
+	addCmd := &cobra.Command{
+		Use:   "add",
+		Short: "Add a profile without changing the current one",
+		Long: `Add (or replace) one profile in the local config file.
+
+This is 'auth login' with one difference: the current profile is left alone, so
+adding a second tenant never silently repoints your next command. The write is
+safe by construction — the whole file is parsed, one entry is upserted, and the
+result is written atomically — so other profiles cannot be corrupted or lost.
+
+The token is read from a no-echo prompt, or from stdin with --token-stdin. It
+never belongs on the command line.`,
+		Example: `  leanctl profile add --tenant acme
+  cat token.txt | leanctl profile add --tenant acme --token-stdin`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return saveProfile(cmd, f, profileSpec{
+				Tenant: addTenant, Name: addName, TokenStdin: tokenStdin, MakeCurrent: false,
+			})
+		},
+	}
+
+	addCmd.Flags().StringVar(&addTenant, "tenant", "",
+		"tenant slug — the regional endpoint is resolved (and kept fresh) for you")
+	addCmd.Flags().StringVar(&addName, "name", "", "profile name (default: the tenant slug)")
+	addCmd.Flags().BoolVar(&tokenStdin, "token-stdin", false, "read the token from stdin instead of prompting")
+
+	cmd.AddCommand(listCmd, useCmd, deleteCmd, currentCmd, refreshCmd, addCmd)
 
 	return cmd
 }
