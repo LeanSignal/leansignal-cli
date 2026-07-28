@@ -7,7 +7,8 @@ identity and role** — what you can do in the web app is what you can do here, 
 nothing more.
 
 ```console
-$ leanctl auth login --api-url https://acme-api.eu11.leansignal.io
+$ leanctl auth login --tenant acme
+Resolving tenant "acme"…
 Personal access token: ****
 Logged in to https://acme-api.eu11.leansignal.io as you@example.com (admin)
 
@@ -122,18 +123,26 @@ first with `leanctl auth logout --revoke`).
    Scopes are `read` (always granted), `write` (create and update), and
    `write:delete` (delete; implies `write`). Write scopes need the editor or
    admin role.
-2. `leanctl auth login --api-url https://<tenant>-api.<region>.leansignal.io`
-   and paste it. That URL is the one the web app already talks to; you supply it
-   once, and it is stored in the context.
+2. `leanctl auth login --tenant <your-tenant>` and paste it.
+
+You name the tenant; the regional endpoint is looked up for you. Tenant APIs
+live in regions (`acme-api.eu11.leansignal.io`) and tenants can move between
+them, so `leanctl` treats the endpoint as a cache, never a fact: login resolves
+it through LeanSignal's region-less front door, and if the tenant later moves,
+the first command that finds the old region gone re-resolves, retries, and
+rewrites the cache — no re-login. (Automatic retry is limited to what is
+provably safe: any request whose connection was refused, and idempotent reads
+that timed out. A `leanctl profile refresh` forces it by hand.)
+
+`--api-url` pins an endpoint instead — for local development or air-gapped
+setups — and opts that profile out of resolution.
 
 The token is verified against `/auth/me` before anything is written to disk, and
-stored at `~/.config/leanctl/config.yaml` with mode `0600`.
+stored at `~/.config/leanctl/config.yaml` with mode `0600`. The resolve lookup
+is the **only** control-center contact `leanctl` ever makes (a test enforces
+it); everything else talks to your tenant's API alone.
 
-`leanctl` never contacts control-center. It talks to one tenant's API and
-nothing else, so there is no tenant-slug lookup and no second host in the trust
-path — which is why the endpoint is given rather than resolved.
-
-In CI, skip login entirely:
+In CI, skip login entirely — a pinned endpoint keeps CI free of the resolver:
 
 ```bash
 export LEANCTL_TOKEN=lsp_…
@@ -141,20 +150,24 @@ export LEANCTL_API_URL=https://<tenant>-api.eu11.leansignal.io
 leanctl demand import --file demands/host-metrics.json --dry-run
 ```
 
-### Multiple tenants
+### Multiple tenants — profiles
 
-Contexts work the way kubectl's do:
+Having several tenants is normal. Each login saves its own **profile** (the
+command also answers to `context`, kubectl-style — same thing):
 
 ```bash
-leanctl auth login --api-url https://acme-api.eu11.leansignal.io   # saves a context
-leanctl auth login --api-url https://globex-api.eu11.leansignal.io      # and another
-leanctl context list
-leanctl context use globex
-leanctl demand list --context acme    # or override per command
+leanctl auth login --tenant acme      # saves profile "acme"
+leanctl auth login --tenant globex    # and "globex"
+leanctl profile list
+leanctl profile use globex            # switch the default
+leanctl demand list --profile acme    # or override per command
+leanctl profile refresh acme          # re-resolve its endpoint by hand
 ```
 
-The context is named after the tenant slug recovered from the host; pass
-`--name` to call it something else.
+`LEANCTL_PROFILE` selects one from the environment. Each profile carries its own
+token and its own cached endpoint; a region move rewrites only the profile it
+belongs to. Pass `--name` at login to call a profile something other than the
+tenant slug.
 
 ## Stored vs Available
 
@@ -280,8 +293,10 @@ Precedence: **flags → environment → config file**.
 | Variable | Effect |
 |---|---|
 | `LEANCTL_TOKEN` | personal access token |
-| `LEANCTL_API_URL` | tenant API origin |
-| `LEANCTL_CONTEXT` | context to use |
+| `LEANCTL_API_URL` | tenant API origin (pins; skips resolution) |
+| `LEANCTL_CONTEXT` / `LEANCTL_PROFILE` | profile to use |
+| `LEANCTL_CC_URL` | resolve front door (default `https://cc.leansignal.io`) |
+| `LEANCTL_RESOLVE_TOKEN` | public resolve token override |
 | `LEANCTL_OUTPUT` | default output format |
 | `LEANCTL_CONFIG` | config file path |
 | `NO_COLOR` | disable colour |
@@ -298,8 +313,9 @@ Precedence: **flags → environment → config file**.
 - TLS 1.2 is the floor. There is no flag to skip certificate verification.
 - `leanctl auth logout --revoke` revokes the token server-side as well as
   removing it locally.
-- Exactly one host is ever contacted: the tenant API you configured. No
-  telemetry, no update check, no control-center call.
+- Two hosts, each with one job: your tenant's API for everything, and the
+  region-less front door for exactly one endpoint — tenant resolution at login
+  and after a region move. No telemetry, no update check.
 - Destructive commands prompt, and refuse to run unattended without `--yes`.
 
 ## Development

@@ -12,8 +12,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -38,7 +40,16 @@ type Client struct {
 	verbose   bool
 	http      *http.Client
 	errOut    io.Writer
+
+	// reresolve, when set, is asked for the tenant's CURRENT endpoint after a
+	// dial failure — tenants can move between regions, and the stored endpoint
+	// is only a cache of where the tenant was last seen. See Do.
+	reresolve func(context.Context) (string, error)
 }
+
+// SetReresolver installs the endpoint re-resolution callback. The callback is
+// responsible for persisting the new endpoint; the client only retries with it.
+func (c *Client) SetReresolver(f func(context.Context) (string, error)) { c.reresolve = f }
 
 // New builds a client from resolved settings.
 func New(s *config.Settings, userAgent string) (*Client, error) {
@@ -84,7 +95,38 @@ type Response struct {
 }
 
 // Do performs the request, returning an *APIError for any non-2xx status.
+//
+// A network failure triggers one endpoint re-resolution and retry when a
+// resolver is installed — the signature of a tenant that has moved regions.
+// The gate is asymmetric on purpose:
+//
+//   - DIAL failures (connection refused, unknown host) retry for every method:
+//     nothing reached a server, so nothing can have been applied.
+//   - Timeouts and post-connect resets retry for GET/HEAD only. They cover the
+//     dead-but-accepting endpoint (a load balancer whose backend is gone), but
+//     the request may have been received — retrying a mutation could apply it
+//     twice, so mutations surface the error instead.
 func (c *Client) Do(ctx context.Context, r Request) (*Response, error) {
+	resp, err := c.attempt(ctx, r)
+	if err == nil || c.reresolve == nil || !retriableWithFreshEndpoint(r.Method, err) {
+		return resp, err
+	}
+
+	fresh, rerr := c.reresolve(ctx)
+
+	fresh = strings.TrimRight(fresh, "/")
+	if rerr != nil || fresh == "" || fresh == c.baseURL {
+		return resp, err
+	}
+
+	c.trace("endpoint moved: %s → %s", c.baseURL, fresh)
+	c.baseURL = fresh
+
+	return c.attempt(ctx, r)
+}
+
+// attempt performs one request against the current base URL.
+func (c *Client) attempt(ctx context.Context, r Request) (*Response, error) {
 	endpoint := c.baseURL + normalizePath(r.Path)
 	if len(r.Query) > 0 {
 		endpoint += "?" + r.Query.Encode()
@@ -135,6 +177,41 @@ func (c *Client) Do(ctx context.Context, r Request) (*Response, error) {
 		Body:        raw,
 		ContentType: resp.Header.Get("Content-Type"),
 	}, nil
+}
+
+// retriableWithFreshEndpoint applies the asymmetric gate described on Do.
+func retriableWithFreshEndpoint(method string, err error) bool {
+	if isDialError(err) {
+		return true
+	}
+
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	// A post-connect read/write failure (connection reset) on an idempotent
+	// request.
+	var opErr *net.OpError
+
+	return errors.As(err, &opErr)
+}
+
+// isDialError reports whether err happened while ESTABLISHING a connection —
+// before any byte reached a server. Only these are safe to retry blindly.
+func isDialError(err error) bool {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) && opErr.Op == "dial" {
+		return true
+	}
+
+	var dnsErr *net.DNSError
+
+	return errors.As(err, &dnsErr)
 }
 
 // Get issues a GET and returns the raw body.

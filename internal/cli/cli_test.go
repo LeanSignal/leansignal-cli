@@ -174,12 +174,13 @@ func TestHelpTextCarriesNoPersonalIdentifiers(t *testing.T) {
 	walk(root)
 }
 
-// leanctl talks to one tenant's lean-api and nothing else. Control-center is
-// not a dependency: it has no CLI-reachable surface (tenant-admin and support
-// need a browser session), and depending on it for tenant resolution would put
-// a second host in the trust path for no gain. This walks the command tree
-// looking for any sign one crept back in.
-func TestNoControlCenterSurface(t *testing.T) {
+// Control-center policy, amended 2026-07-28: the CLI may contact CC for
+// exactly ONE thing — /resolve_tenant, which maps a tenant slug to its current
+// regional endpoint (tenants can move between regions, so endpoints are caches,
+// not facts). Everything else stays out: tenant-admin, support, and invitations
+// need a browser session CC validates, so commands for them cannot exist here.
+// This walks the tree for any sign of that wider surface creeping back in.
+func TestControlCenterIsResolveOnly(t *testing.T) {
 	root := NewRootCommand()
 
 	banned := []string{"cc.leansignal.io", "resolve_tenant", "control-center", "control center"}

@@ -39,8 +39,15 @@ const DefaultTimeout = 30 * time.Second
 // Context is one tenant's endpoint and credential.
 type Context struct {
 	Tenant string `mapstructure:"tenant" yaml:"tenant"`
+	// APIURL is a CACHE of the tenant's current regional endpoint when Resolve
+	// is true, and a user-pinned endpoint when it is false. Tenants can move
+	// between regions, so resolve-originated contexts re-resolve and rewrite
+	// this on a connection failure.
 	APIURL string `mapstructure:"api_url" yaml:"api_url"`
-	Token  string `mapstructure:"token" yaml:"token"`
+	// Resolve records how APIURL was obtained: true = resolved via
+	// control-center (re-resolution allowed), false = pinned with --api-url.
+	Resolve bool   `mapstructure:"resolve" yaml:"resolve,omitempty"`
+	Token   string `mapstructure:"token" yaml:"token"`
 	// User and Role are cached from /auth/me at login time for display only.
 	// They are never trusted for access decisions — the server decides.
 	User string `mapstructure:"user" yaml:"user,omitempty"`
@@ -87,7 +94,7 @@ type Settings struct {
 
 // ErrNoContext means no credential could be resolved from flags, env, or file.
 var ErrNoContext = errors.New(
-	"no context configured — run 'leanctl auth login --api-url <tenant-api-url>'" +
+	"no context configured — run 'leanctl auth login --tenant <tenant>'" +
 		" or set LEANCTL_TOKEN and LEANCTL_API_URL")
 
 // DefaultPath is $XDG_CONFIG_HOME/leanctl/config.yaml, falling back to
@@ -218,7 +225,7 @@ func Resolve(o Overrides) (*Settings, error) {
 	v.AutomaticEnv()
 
 	s := &Settings{
-		ContextName: firstNonEmpty(o.ContextName, v.GetString("context"), file.CurrentContext),
+		ContextName: firstNonEmpty(o.ContextName, v.GetString("context"), v.GetString("profile"), file.CurrentContext),
 		APIURL:      firstNonEmpty(o.APIURL, v.GetString("api_url")),
 		Token:       firstNonEmpty(o.Token, v.GetString("token")),
 		Output:      firstNonEmpty(o.Output, v.GetString("output"), "table"),

@@ -204,4 +204,4 @@ case ":$PATH:" in
     ;;
 esac
 
-info "next: leanctl auth login --api-url https://<tenant>-api.eu11.leansignal.io"
+info "next: leanctl auth login --tenant <your-tenant>"

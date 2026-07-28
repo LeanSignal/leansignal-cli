@@ -69,7 +69,7 @@ func (e *APIError) Hint() string {
 			" (or 'write:delete' to delete) via 'leanctl auth tokens create'"
 	case e.Code == "invalid_token", e.Status == http.StatusUnauthorized:
 		return "the token was rejected — mint a new one in the web app, then" +
-			" 'leanctl auth login --api-url <tenant-api-url>'"
+			" 'leanctl auth login --tenant <tenant>'"
 	case e.Status == http.StatusForbidden:
 		return "your role does not allow this action"
 	default:

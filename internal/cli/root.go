@@ -7,6 +7,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -28,6 +29,28 @@ type Factory struct {
 	settings *config.Settings
 	api      *client.Client
 	printer  *output.Printer
+}
+
+// explicitAPIURL and explicitToken return only what the user supplied on THIS
+// invocation (flag or environment) — never values back-filled from the current
+// context. Login uses these: resolving "which endpoint / which credential" from
+// the context being switched AWAY from silently logs the new tenant in against
+// the old tenant's endpoint (or reuses its token), which is exactly what
+// happened before these existed.
+func (f *Factory) explicitAPIURL() string {
+	if f.overrides.APIURL != "" {
+		return f.overrides.APIURL
+	}
+
+	return os.Getenv("LEANCTL_API_URL")
+}
+
+func (f *Factory) explicitToken() string {
+	if f.overrides.Token != "" {
+		return f.overrides.Token
+	}
+
+	return os.Getenv("LEANCTL_TOKEN")
 }
 
 // Settings resolves flags, environment, and config file exactly once.
@@ -61,6 +84,34 @@ func (f *Factory) Client() (*client.Client, error) {
 	c, err := client.New(s, "leanctl/"+build.Version)
 	if err != nil {
 		return nil, err
+	}
+
+	// A resolve-originated context treats its endpoint as a cache: when the
+	// regional host stops answering (a tenant that moved regions), the client
+	// re-resolves through control-center, retries, and the fresh endpoint is
+	// persisted so the next invocation goes straight there. Pinned contexts
+	// (--api-url) opt out.
+	if cctx, ok := s.File.Contexts[s.ContextName]; ok && cctx != nil && cctx.Resolve && cctx.Tenant != "" {
+		file, name := s.File, s.ContextName
+
+		c.SetReresolver(func(rctx context.Context) (string, error) {
+			fresh, err := config.ResolveTenant(rctx, cctx.Tenant, s.Timeout)
+			if err != nil {
+				return "", err
+			}
+
+			if cur := file.Contexts[name]; cur != nil && cur.APIURL != fresh {
+				fmt.Fprintf(os.Stderr, "tenant %q has moved: %s -> %s\n", cctx.Tenant, cur.APIURL, fresh)
+				cur.APIURL = fresh
+
+				// Best-effort: a read-only config file must not fail the command.
+				if err := file.Save(); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: could not persist the new endpoint: %v\n", err)
+				}
+			}
+
+			return fresh, nil
+		})
 	}
 
 	f.api = c
@@ -106,8 +157,8 @@ LeanSignal stores only demanded telemetry. Query commands therefore have two
 sides: the default reads the central store (demanded data, 30d retention), and
 --available reads the edge agent's local store (everything it collects, ~1d for
 metrics and ~1h for logs and traces).`,
-		Example: `  # Log in to a tenant (prompts for the token)
-  leanctl auth login --api-url https://acme-api.eu11.leansignal.io
+		Example: `  # Log in to a tenant (resolves the regional endpoint, prompts for the token)
+  leanctl auth login --tenant acme
 
   # List what you have
   leanctl demand list
@@ -146,6 +197,9 @@ metrics and ~1h for logs and traces).`,
 	p.StringVar(&f.overrides.ConfigPath, "config", "",
 		"config file (default "+config.DefaultPath()+")")
 	p.StringVar(&f.overrides.ContextName, "context", "", "context to use (default: current_context)")
+	// --profile is the AWS-style spelling of --context; both write the same
+	// variable, so whichever appears later on the command line wins.
+	p.StringVar(&f.overrides.ContextName, "profile", "", "alias for --context")
 	p.StringVar(&f.overrides.APIURL, "api-url", "", "tenant API origin (overrides the context)")
 	p.StringVarP(&f.overrides.Output, "output", "o", "",
 		"output format: "+joinFormats())

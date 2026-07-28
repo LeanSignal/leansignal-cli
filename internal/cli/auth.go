@@ -39,6 +39,7 @@ Your role still decides the rest — a viewer's write token is still read-only.`
 
 func newAuthLoginCommand(f *Factory) *cobra.Command {
 	var (
+		tenant      string
 		contextName string
 		tokenStdin  bool
 	)
@@ -49,16 +50,18 @@ func newAuthLoginCommand(f *Factory) *cobra.Command {
 		Long: `Verify a personal access token against a tenant's API and save both as a
 named context.
 
---api-url is required. leanctl talks to one tenant's API and nothing else, so
-it does not ask control-center to resolve a tenant slug to an endpoint. The URL
-is the one the web app uses, visible in its address bar as <tenant>-api.<region>,
-and you only supply it once — it is stored in the context.
+--tenant names the tenant; the regional endpoint is resolved through
+control-center's region-less front door, and re-resolved automatically if the
+tenant later moves regions — the stored endpoint is a cache, never a fact.
+
+--api-url pins an endpoint instead (local dev, air-gapped setups). A pinned
+context opts out of re-resolution and must be re-logged-in after a region move.
 
 The token is read from a no-echo prompt by default. In CI, either pipe it in
 with --token-stdin or skip login entirely and set LEANCTL_TOKEN together with
 LEANCTL_API_URL.`,
-		Example: `  leanctl auth login --api-url https://acme-api.eu11.leansignal.io
-  cat token.txt | leanctl auth login --api-url https://acme-api.eu11.leansignal.io --token-stdin
+		Example: `  leanctl auth login --tenant acme
+  cat token.txt | leanctl auth login --tenant acme --token-stdin
   leanctl auth login --api-url http://localhost:8080 --name dev`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -70,14 +73,27 @@ LEANCTL_API_URL.`,
 				return err
 			}
 
-			apiURL := settings.APIURL
+			// Explicit flag/env only — settings.APIURL may be back-filled from
+			// the CURRENT context, which is the tenant being switched away from.
+			apiURL := strings.TrimRight(f.explicitAPIURL(), "/")
+			resolved := false
 
-			if apiURL == "" {
+			switch {
+			case tenant != "" && apiURL == "":
+				fmt.Fprintf(cmd.ErrOrStderr(), "Resolving tenant %q…\n", tenant)
+
+				apiURL, err = config.ResolveTenant(ctx, tenant, settings.Timeout)
+				if err != nil {
+					return err
+				}
+
+				resolved = true
+			case apiURL == "":
 				return client.Usage(
-					"--api-url is required, e.g. --api-url https://<tenant>-api.eu11.leansignal.io")
+					"pass --tenant <slug> (resolves the endpoint) or --api-url <url> (pins one)")
 			}
 
-			token, err := readLoginToken(tokenStdin, settings.Token)
+			token, err := readLoginToken(tokenStdin, f.explicitToken())
 			if err != nil {
 				return err
 			}
@@ -112,11 +128,12 @@ LEANCTL_API_URL.`,
 				return client.Usage("could not verify the token: %s", msg)
 			}
 
-			// The tenant label is derived locally, never from the response:
-			// /auth/me's tenant fields come from control-center, and the server
-			// returns them empty whenever that call does not succeed — which is
-			// the normal case for a token-authenticated session.
-			tenant := tenantFromAPIURL(probe.APIURL)
+			// Without --tenant, a display label is recovered from the pinned
+			// host. Never from /auth/me: its tenant fields come from
+			// control-center and are empty for a token-authenticated session.
+			if tenant == "" {
+				tenant = tenantFromAPIURL(probe.APIURL)
+			}
 
 			name := firstNonEmpty(contextName, tenant)
 			if name == "" {
@@ -125,11 +142,12 @@ LEANCTL_API_URL.`,
 
 			file := settings.File
 			file.Contexts[name] = &config.Context{
-				Tenant: tenant,
-				APIURL: probe.APIURL,
-				Token:  token,
-				User:   me.Email,
-				Role:   me.Role,
+				Tenant:  tenant,
+				APIURL:  probe.APIURL,
+				Resolve: resolved,
+				Token:   token,
+				User:    me.Email,
+				Role:    me.Role,
 			}
 			file.CurrentContext = name
 
@@ -145,8 +163,8 @@ LEANCTL_API_URL.`,
 	}
 
 	fs := cmd.Flags()
-	// The endpoint comes from the global --api-url flag; --name is what the
-	// saved context is called (the global --context selects one).
+	fs.StringVar(&tenant, "tenant", "",
+		"tenant slug — the regional endpoint is resolved (and kept fresh) for you")
 	fs.StringVar(&contextName, "name", "", "name for the saved context (default: the tenant slug)")
 	fs.BoolVar(&tokenStdin, "token-stdin", false, "read the token from stdin instead of prompting")
 

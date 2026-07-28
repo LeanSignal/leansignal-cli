@@ -23,25 +23,34 @@ empty `SessionID` plus a `" (CLI)"` display-name suffix for audit attribution.
 
 Consequences the CLI already encodes:
 
-- **leanctl never contacts control-center — not for anything.** One host is
-  contacted: the tenant API in the active context. `TestNoControlCenterSurface`
-  enforces it across the command tree.
+- **Control-center is resolve-only** (policy amended 2026-07-28; it was "no CC
+  at all" for one day). Endpoints are REGIONAL and tenants can move regions, so
+  a stored endpoint is a cache: `auth login --tenant` resolves it through CC's
+  region-less `/resolve_tenant` (public `aat` token, same contract as the web
+  app and the agent), and the client re-resolves + retries when the cached
+  region stops answering. `TestControlCenterIsResolveOnly` pins the boundary.
+  - **The retry gate is asymmetric on purpose** (`client.Do`): dial failures
+    retry for every method (nothing reached a server); timeouts and resets
+    retry for GET/HEAD only — a timed-out mutation may already have been
+    applied. `context refresh` covers the old-region-still-answering case.
+  - **`--api-url` pins** (`Context.Resolve=false`): local dev and CI opt out of
+    resolution entirely.
+  - **Login reads only explicit flag/env values** (`Factory.explicitAPIURL` /
+    `explicitToken`), never context-merged settings — inheriting them logs the
+    new tenant in against the CURRENT context's endpoint or reuses its token.
+    This bug shipped once; the helpers exist so it cannot again.
   - `/api/v1/tenant-admin/*` and `/api/v1/support/*` **can never work with a
-    token**: `internal/cc.Client.buildURL` injects a `session_id` that
-    control-center validates, and a token has no CC session. There are no
-    `user`, `invitation`, or `support` commands; if the server ever routes one
-    here anyway, the error path expects `403 session_required`.
-  - **Tenant resolution was removed** (it used to call CC's `/resolve_tenant`,
-    the way the web app does at boot). `auth login` therefore **requires
-    `--api-url`**. The tenant slug is recovered from the host purely to name the
-    context — never as an authorization input.
+    token**: `internal/cc.Client.buildURL` injects a `session_id` that CC
+    validates, and a token has no CC session. No `user`/`invitation`/`support`
+    commands; the error path expects `403 session_required`.
   - **`/auth/me` is used but not trusted for tenant data.** lean-api enriches it
     from CC and, when that call fails, returns session-only fields — the normal
-    case under token auth. `client.Me` maps only `email`/`display_name`/`role`
-    for exactly that reason; do not add `tenant_name` back.
+    case under token auth. `client.Me` maps only `email`/`display_name`/`role`.
   - Endpoints where lean-api talks to CC *server-side with its own service key*
-    (channel email delivery, `channel test`) are fine and stay — no user session
-    is involved.
+    (channel email delivery, `channel test`) are unaffected.
+- **`profile` is a full synonym for `context`** — command alias, `--profile`
+  flag (same variable as `--context`), `LEANCTL_PROFILE` env. Multiple tenants
+  are the normal case; both vocabularies (kubectl, AWS) must keep working.
 - **Scopes narrow, roles decide.** A token carries a role snapshot; the effective
   permission is role ∩ scope. The vocabulary is `read` / `write` / `write:delete`
   and is **owned by lean-api** (`ai.NormalizeScopes`): `read` is always granted,

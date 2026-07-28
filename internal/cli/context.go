@@ -7,18 +7,22 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/leansignal/leansignal-cli/internal/client"
+	"github.com/leansignal/leansignal-cli/internal/config"
 	"github.com/leansignal/leansignal-cli/internal/output"
 )
 
 func newContextCommand(f *Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "context",
-		Aliases: []string{"contexts", "ctx"},
-		Short:   "Switch between tenants",
-		Long: `A context pairs a tenant's API endpoint with an access token.
+		Aliases: []string{"contexts", "ctx", "profile", "profiles"},
+		Short:   "Switch between tenants (also answers to: profile)",
+		Long: `A context — a profile, if that is the word you reach for — pairs one tenant's
+API endpoint with an access token. Having several is normal: log in once per
+tenant and each login saves its own entry.
 
-Log in once per tenant, then switch with 'leanctl context use <name>' — or
-select one for a single command with the global --context flag.`,
+Switch with 'leanctl context use <name>' (or 'leanctl profile use <name>' —
+the AWS-style spelling works everywhere), or select one for a single command
+with --context/--profile, or set LEANCTL_PROFILE in the environment.`,
 	}
 
 	listCmd := &cobra.Command{
@@ -48,7 +52,7 @@ select one for a single command with the global --context flag.`,
 
 			return p.Emit(mustJSON(file), func() (*output.Table, error) {
 				t := output.NewTable("CURRENT", "NAME", "TENANT", "API", "USER", "ROLE")
-				t.Empty = "No contexts. Run 'leanctl auth login --api-url <tenant-api-url>'."
+				t.Empty = "No contexts. Run 'leanctl auth login --tenant <tenant>'."
 				t.IDColumn = 1
 
 				for _, name := range names {
@@ -159,7 +163,67 @@ select one for a single command with the global --context flag.`,
 		},
 	}
 
-	cmd.AddCommand(listCmd, useCmd, deleteCmd, currentCmd)
+	refreshCmd := &cobra.Command{
+		Use:   "refresh [name]",
+		Short: "Re-resolve a context's endpoint from control-center",
+		Long: `Ask control-center where the context's tenant lives now and update the
+stored endpoint.
+
+Connection failures already trigger this automatically; refresh covers the case
+where the old region still answers but no longer serves the tenant. Pinned
+contexts (created with --api-url) are not resolvable — log in again to re-pin.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := cmdContext(cmd)
+			defer cancel()
+
+			settings, err := f.Settings()
+			if err != nil {
+				return err
+			}
+
+			name := settings.ContextName
+			if len(args) == 1 {
+				name = args[0]
+			}
+
+			file := settings.File
+
+			cctx, ok := file.Contexts[name]
+			if !ok || cctx == nil {
+				return client.Usage("context %q not found in %s", name, file.Path())
+			}
+
+			if !cctx.Resolve || cctx.Tenant == "" {
+				return client.Usage(
+					"context %q pins its endpoint (--api-url); log in again to change it", name)
+			}
+
+			fresh, err := config.ResolveTenant(ctx, cctx.Tenant, settings.Timeout)
+			if err != nil {
+				return err
+			}
+
+			if fresh == cctx.APIURL {
+				fmt.Fprintf(cmd.OutOrStdout(), "Context %q is current: %s\n", name, fresh)
+
+				return nil
+			}
+
+			previous := cctx.APIURL
+			cctx.APIURL = fresh
+
+			if err := file.Save(); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Context %q: %s -> %s\n", name, previous, fresh)
+
+			return nil
+		},
+	}
+
+	cmd.AddCommand(listCmd, useCmd, deleteCmd, currentCmd, refreshCmd)
 
 	return cmd
 }
