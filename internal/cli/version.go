@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/leansignal/lean-cli/internal/build"
+	"github.com/leansignal/leansignal-cli/internal/build"
 )
 
 func newVersionCommand() *cobra.Command {

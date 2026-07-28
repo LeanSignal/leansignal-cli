@@ -12,10 +12,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/leansignal/lean-cli/internal/build"
-	"github.com/leansignal/lean-cli/internal/client"
-	"github.com/leansignal/lean-cli/internal/config"
-	"github.com/leansignal/lean-cli/internal/output"
+	"github.com/leansignal/leansignal-cli/internal/build"
+	"github.com/leansignal/leansignal-cli/internal/client"
+	"github.com/leansignal/leansignal-cli/internal/config"
+	"github.com/leansignal/leansignal-cli/internal/output"
 )
 
 // Factory lazily resolves the settings, API client, and printer a command

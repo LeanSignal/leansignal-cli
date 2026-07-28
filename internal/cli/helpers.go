@@ -17,8 +17,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/leansignal/lean-cli/internal/client"
-	"github.com/leansignal/lean-cli/internal/output"
+	"github.com/leansignal/leansignal-cli/internal/client"
+	"github.com/leansignal/leansignal-cli/internal/output"
 )
 
 // uuidRE recognises an id, so a positional argument can be either an id or a

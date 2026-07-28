@@ -2,7 +2,7 @@
 # leanctl installer for macOS and Linux.
 #
 # Quick start:
-#   curl -fsSL https://raw.githubusercontent.com/LeanSignal/lean-cli/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/LeanSignal/leansignal-cli/main/scripts/install.sh | sh
 #
 # No credential is needed. GH_TOKEN / a logged-in `gh` CLI are honoured when
 # present (useful against a private fork), never required.
@@ -16,7 +16,7 @@
 # Review this script before piping it to a shell.
 set -eu
 
-REPO="${LEANCTL_REPO:-LeanSignal/lean-cli}"
+REPO="${LEANCTL_REPO:-LeanSignal/leansignal-cli}"
 VERSION="${VERSION:-latest}"
 BIN_DIR="${BIN_DIR:-}"
 NO_VERIFY="${NO_VERIFY:-0}"
@@ -105,7 +105,7 @@ if [ "$VERSION" = "latest" ]; then
   [ -n "$VERSION" ] || err "could not resolve the latest release of $REPO.
   Check your network, or pass --version vX.Y.Z explicitly. To build from
   source instead:
-    git clone https://github.com/$REPO.git && cd lean-cli && make install"
+    git clone https://github.com/$REPO.git && cd leansignal-cli && make install"
 fi
 
 # Release archives are named by goreleaser as

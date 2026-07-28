@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/leansignal/lean-cli/internal/output"
+	"github.com/leansignal/leansignal-cli/internal/output"
 )
 
 func newLogsCommand(f *Factory) *cobra.Command {

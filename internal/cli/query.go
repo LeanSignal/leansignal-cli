@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leansignal/lean-cli/internal/client"
+	"github.com/leansignal/leansignal-cli/internal/client"
 )
 
 // The query commands (metrics, logs, traces) all speak to a pair of proxies:

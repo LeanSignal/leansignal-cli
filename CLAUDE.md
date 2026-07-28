@@ -1,12 +1,12 @@
-# lean-cli — repo guide
+# leansignal-cli — repo guide
 
 `leanctl`, the LeanSignal command-line client. A Go/Cobra binary that talks to
 **one tenant's lean-api** over the public REST surface, authenticated with an
 `lsp_` personal access token. Cross-repo architecture lives in the workspace-level
-`../CLAUDE.md`; this file is about working *inside* lean-cli.
+`../CLAUDE.md`; this file is about working *inside* leansignal-cli.
 
-> **Repo is `lean-cli`, binary is `leanctl`.** Module path
-> `github.com/leansignal/lean-cli`, `cmd/leanctl/main.go` builds `leanctl`.
+> **Repo is `leansignal-cli`, binary is `leanctl`.** Module path
+> `github.com/leansignal/leansignal-cli`, `cmd/leanctl/main.go` builds `leanctl`.
 
 ## Server-side dependency
 

@@ -16,9 +16,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/leansignal/lean-cli/internal/build.Version={{ .Version }}
-      - -X github.com/leansignal/lean-cli/internal/build.Commit={{ .FullCommit }}
-      - -X github.com/leansignal/lean-cli/internal/build.Date={{ .Date }}
+      - -X github.com/leansignal/leansignal-cli/internal/build.Version={{ .Version }}
+      - -X github.com/leansignal/leansignal-cli/internal/build.Commit={{ .FullCommit }}
+      - -X github.com/leansignal/leansignal-cli/internal/build.Date={{ .Date }}
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ignore:
@@ -69,6 +69,6 @@ changelog:
 release:
   github:
     owner: LeanSignal
-    name: lean-cli
+    name: leansignal-cli
   draft: false
   prerelease: auto

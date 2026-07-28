@@ -1,4 +1,4 @@
-module github.com/leansignal/lean-cli
+module github.com/leansignal/leansignal-cli
 
 go 1.25.1
 

@@ -7,7 +7,7 @@ package main
 import (
 	"os"
 
-	"github.com/leansignal/lean-cli/internal/cli"
+	"github.com/leansignal/leansignal-cli/internal/cli"
 )
 
 func main() {

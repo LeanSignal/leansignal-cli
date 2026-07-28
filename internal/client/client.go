@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leansignal/lean-cli/internal/config"
+	"github.com/leansignal/leansignal-cli/internal/config"
 )
 
 // APIPrefix is the versioned base path every resource route hangs off.

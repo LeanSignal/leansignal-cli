@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/leansignal/lean-cli/internal/config"
+	"github.com/leansignal/leansignal-cli/internal/config"
 )
 
 func writeConfig(t *testing.T, body string, perm os.FileMode) string {

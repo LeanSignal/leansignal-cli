@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leansignal/lean-cli/internal/output"
+	"github.com/leansignal/leansignal-cli/internal/output"
 )
 
 func newPrinter(format output.Format) (*output.Printer, *bytes.Buffer, *bytes.Buffer) {

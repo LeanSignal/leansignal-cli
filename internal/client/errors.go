@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/leansignal/lean-cli/internal/config"
+	"github.com/leansignal/leansignal-cli/internal/config"
 )
 
 // Exit codes. Scripts branch on these, so they are part of the CLI's contract

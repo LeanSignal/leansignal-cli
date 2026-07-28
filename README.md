@@ -24,7 +24,7 @@ $ leanctl demand export host-metrics > demands/host-metrics.json
 ### One-liner (macOS and Linux)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LeanSignal/lean-cli/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/LeanSignal/leansignal-cli/main/scripts/install.sh | sh
 ```
 
 Detects your OS and architecture, downloads the matching release, verifies its
@@ -39,10 +39,10 @@ Releases carry `leanctl_<version>_<os>_<arch>.tar.gz` for `darwin` and `linux`,
 
 ```bash
 # macOS (Apple Silicon: arm64; Intel: amd64) — check with `uname -m`
-curl -fsSLO https://github.com/LeanSignal/lean-cli/releases/latest/download/leanctl_0.8.0_darwin_arm64.tar.gz
+curl -fsSLO https://github.com/LeanSignal/leansignal-cli/releases/latest/download/leanctl_0.8.0_darwin_arm64.tar.gz
 
 # Linux
-curl -fsSLO https://github.com/LeanSignal/lean-cli/releases/latest/download/leanctl_0.8.0_linux_amd64.tar.gz
+curl -fsSLO https://github.com/LeanSignal/leansignal-cli/releases/latest/download/leanctl_0.8.0_linux_amd64.tar.gz
 
 tar -xzf leanctl_*.tar.gz
 sudo install -m 0755 leanctl /usr/local/bin/leanctl
@@ -61,14 +61,14 @@ flag; if you did download it another way, clear it with
 keylessly, so no key is needed:
 
 ```bash
-base=https://github.com/LeanSignal/lean-cli/releases/latest/download
+base=https://github.com/LeanSignal/leansignal-cli/releases/latest/download
 curl -fsSLO $base/checksums.txt -O $base/checksums.txt.sig -O $base/checksums.txt.pem
 
 shasum -a 256 -c checksums.txt --ignore-missing   # `sha256sum -c` on Linux
 
 cosign verify-blob checksums.txt \
   --signature checksums.txt.sig --certificate checksums.txt.pem \
-  --certificate-identity-regexp 'https://github.com/LeanSignal/lean-cli/.*' \
+  --certificate-identity-regexp 'https://github.com/LeanSignal/leansignal-cli/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -77,8 +77,8 @@ cosign verify-blob checksums.txt \
 Needs Go 1.25+.
 
 ```bash
-git clone https://github.com/LeanSignal/lean-cli.git
-cd lean-cli
+git clone https://github.com/LeanSignal/leansignal-cli.git
+cd leansignal-cli
 make install          # -> $GOBIN, or $(go env GOPATH)/bin
 leanctl version
 ```

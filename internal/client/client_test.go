@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leansignal/lean-cli/internal/client"
-	"github.com/leansignal/lean-cli/internal/config"
+	"github.com/leansignal/leansignal-cli/internal/client"
+	"github.com/leansignal/leansignal-cli/internal/config"
 )
 
 func newTestClient(t *testing.T, h http.HandlerFunc) (*client.Client, *httptest.Server) {
