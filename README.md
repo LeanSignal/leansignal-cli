@@ -40,10 +40,10 @@ Releases carry `leanctl_<version>_<os>_<arch>.tar.gz` for `darwin` and `linux`,
 
 ```bash
 # macOS (Apple Silicon: arm64; Intel: amd64) — check with `uname -m`
-curl -fsSLO https://github.com/LeanSignal/leansignal-cli/releases/latest/download/leanctl_0.8.0_darwin_arm64.tar.gz
+curl -fsSLO https://github.com/LeanSignal/leansignal-cli/releases/download/v0.8.1/leanctl_0.8.1_darwin_arm64.tar.gz
 
 # Linux
-curl -fsSLO https://github.com/LeanSignal/leansignal-cli/releases/latest/download/leanctl_0.8.0_linux_amd64.tar.gz
+curl -fsSLO https://github.com/LeanSignal/leansignal-cli/releases/download/v0.8.1/leanctl_0.8.1_linux_amd64.tar.gz
 
 tar -xzf leanctl_*.tar.gz
 sudo install -m 0755 leanctl /usr/local/bin/leanctl
@@ -62,7 +62,7 @@ flag; if you did download it another way, clear it with
 keylessly, so no key is needed:
 
 ```bash
-base=https://github.com/LeanSignal/leansignal-cli/releases/latest/download
+base=https://github.com/LeanSignal/leansignal-cli/releases/download/v0.8.1
 curl -fsSLO $base/checksums.txt -O $base/checksums.txt.sig -O $base/checksums.txt.pem
 
 shasum -a 256 -c checksums.txt --ignore-missing   # `sha256sum -c` on Linux
