@@ -21,13 +21,13 @@ func writeConfig(t *testing.T, body string, perm os.FileMode) string {
 	return path
 }
 
-const sample = `current_context: petkopuma
+const sample = `current_context: acme
 contexts:
-  petkopuma:
-    tenant: petkopuma
-    api_url: https://petkopuma-api.example.com
+  acme:
+    tenant: acme
+    api_url: https://acme-api.example.com
     token: lsp_secret
-    user: nikola@example.com
+    user: you@example.com
     role: admin
   other:
     tenant: other
@@ -101,7 +101,7 @@ func TestResolvePrecedence(t *testing.T) {
 			t.Fatalf("Resolve: %v", err)
 		}
 
-		if s.Tenant != "petkopuma" || s.Token != "lsp_secret" {
+		if s.Tenant != "acme" || s.Token != "lsp_secret" {
 			t.Errorf("got tenant=%q token=%q", s.Tenant, s.Token)
 		}
 

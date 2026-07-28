@@ -107,7 +107,7 @@ sides: the default reads the central store (demanded data, 30d retention), and
 --available reads the edge agent's local store (everything it collects, ~1d for
 metrics and ~1h for logs and traces).`,
 		Example: `  # Log in to a tenant (prompts for the token)
-  leanctl auth login --tenant petkopuma
+  leanctl auth login --api-url https://acme-api.eu11.leansignal.io
 
   # List what you have
   leanctl demand list

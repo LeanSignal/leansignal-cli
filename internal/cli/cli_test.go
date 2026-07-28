@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Every command must carry help text and, where it takes arguments, an
@@ -48,6 +50,120 @@ func TestNoTokenFlagAnywhere(t *testing.T) {
 	walk = func(c *cobra.Command) {
 		if c.Flags().Lookup("token") != nil {
 			t.Errorf("%q exposes a --token flag; use LEANCTL_TOKEN or auth login", c.CommandPath())
+		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+
+	walk(root)
+}
+
+// Every example must be runnable as written: the command path it names must
+// resolve, and every flag it passes must exist on that command. This is the
+// test that would have caught `auth login --tenant` surviving in an example
+// after the flag was removed.
+func TestExamplesResolveAndUseRealFlags(t *testing.T) {
+	root := NewRootCommand()
+	flagRe := regexp.MustCompile(`--([a-z][a-z0-9-]+)`)
+
+	var walk func(*cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		for _, line := range strings.Split(c.Example, "\n") {
+			idx := strings.Index(line, "leanctl ")
+			if idx < 0 {
+				continue
+			}
+
+			invocation := line[idx+len("leanctl "):]
+
+			target, _, err := root.Find(strings.Fields(invocation))
+			if err != nil || target == root && !strings.HasPrefix(invocation, "-") {
+				// Find falls back to root for unknown paths; an example naming
+				// a nonexistent subcommand must fail, not silently pass.
+				if err != nil {
+					t.Errorf("%q example does not resolve: %q (%v)", c.CommandPath(), line, err)
+
+					continue
+				}
+			}
+
+			for _, m := range flagRe.FindAllStringSubmatch(invocation, -1) {
+				name := m[1]
+				if target.Flags().Lookup(name) == nil &&
+					target.InheritedFlags().Lookup(name) == nil &&
+					target.PersistentFlags().Lookup(name) == nil {
+					t.Errorf("%q example uses --%s, which %q does not define: %q",
+						c.CommandPath(), name, target.CommandPath(), line)
+				}
+			}
+		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+
+	walk(root)
+}
+
+// Help prose may only name flags that exist somewhere in the tree, so removing
+// a flag forces every sentence that mentioned it to be updated with it.
+func TestHelpProseNamesOnlyRealFlags(t *testing.T) {
+	root := NewRootCommand()
+	flagRe := regexp.MustCompile(`--([a-z][a-z0-9-]+)`)
+
+	known := map[string]bool{}
+
+	var collect func(*cobra.Command)
+
+	collect = func(c *cobra.Command) {
+		for _, fs := range []*pflag.FlagSet{c.Flags(), c.PersistentFlags()} {
+			fs.VisitAll(func(fl *pflag.Flag) { known[fl.Name] = true })
+		}
+
+		for _, sub := range c.Commands() {
+			collect(sub)
+		}
+	}
+
+	collect(root)
+
+	var walk func(*cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		for _, text := range []string{c.Short, c.Long, c.Example} {
+			for _, m := range flagRe.FindAllStringSubmatch(text, -1) {
+				if !known[m[1]] {
+					t.Errorf("%q help text names --%s, which no command defines", c.CommandPath(), m[1])
+				}
+			}
+		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+
+	walk(root)
+}
+
+// Public examples stay vanilla: no real tenant slugs, hosts, or people.
+func TestHelpTextCarriesNoPersonalIdentifiers(t *testing.T) {
+	root := NewRootCommand()
+
+	banned := []string{"petkopuma", "nikola", "datomatics", "lsh "}
+
+	var walk func(*cobra.Command)
+
+	walk = func(c *cobra.Command) {
+		blob := strings.ToLower(c.Short + " " + c.Long + " " + c.Example)
+		for _, b := range banned {
+			if strings.Contains(blob, b) {
+				t.Errorf("%q help text contains %q", c.CommandPath(), strings.TrimSpace(b))
+			}
 		}
 
 		for _, sub := range c.Commands() {

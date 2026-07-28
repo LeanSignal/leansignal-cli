@@ -7,14 +7,14 @@ identity and role** — what you can do in the web app is what you can do here, 
 nothing more.
 
 ```console
-$ leanctl auth login --api-url https://petkopuma-api.eu11.leansignal.io
+$ leanctl auth login --api-url https://acme-api.eu11.leansignal.io
 Personal access token: ****
-Logged in to https://petkopuma-api.eu11.leansignal.io as nikola@example.com (admin)
+Logged in to https://acme-api.eu11.leansignal.io as you@example.com (admin)
 
 $ leanctl demand list
 NAME           DESCRIPTION              CREATED BY            AGE
-host-metrics   node health and disk     nikola@example.com    12d
-kubernetes     cluster + workloads      nikola@example.com    5d
+host-metrics   node health and disk     you@example.com    12d
+kubernetes     cluster + workloads      you@example.com    5d
 
 $ leanctl demand export host-metrics > demands/host-metrics.json
 ```
@@ -52,8 +52,8 @@ leanctl version
 Without `sudo`, put it anywhere on your `PATH` instead:
 `install -m 0755 leanctl ~/.local/bin/leanctl`.
 
-**macOS:** the binaries are signed but not notarized, so a build fetched through
-a browser is quarantined and Gatekeeper will refuse it. `curl` does not set that
+**macOS:** the binaries are not notarized, so a build fetched through a browser
+is quarantined and Gatekeeper will refuse it. `curl` does not set that
 flag; if you did download it another way, clear it with
 `xattr -d com.apple.quarantine leanctl`.
 
@@ -146,11 +146,11 @@ leanctl demand import --file demands/host-metrics.json --dry-run
 Contexts work the way kubectl's do:
 
 ```bash
-leanctl auth login --api-url https://petkopuma-api.eu11.leansignal.io   # saves a context
-leanctl auth login --api-url https://lean-api.eu11.leansignal.io        # and another
+leanctl auth login --api-url https://acme-api.eu11.leansignal.io   # saves a context
+leanctl auth login --api-url https://globex-api.eu11.leansignal.io      # and another
 leanctl context list
-leanctl context use lean
-leanctl demand list --context petkopuma    # or override per command
+leanctl context use globex
+leanctl demand list --context acme    # or override per command
 ```
 
 The context is named after the tenant slug recovered from the host; pass
@@ -245,10 +245,10 @@ empty for pipelines. Colour turns itself off when stdout is not a terminal or
 over the agent's control stream — admin role, connected agent:
 
 ```bash
-leanctl agent config get lsh                                     # what sources exist
-leanctl agent config get lsh --path /etc/leansignal-agent/config.yaml > c.yaml
+leanctl agent config get my-agent                                     # what sources exist
+leanctl agent config get my-agent --path /etc/leansignal-agent/config.yaml > c.yaml
 $EDITOR c.yaml
-leanctl agent config apply lsh --file c.yaml
+leanctl agent config apply my-agent --file c.yaml
 ```
 
 The **agent** validates the write — YAML parse plus a full collector dry-run of

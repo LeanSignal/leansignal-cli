@@ -31,9 +31,9 @@ never written, and the validator's own complaint comes back verbatim.
 
 The intended loop:
 
-  leanctl agent config get lsh --path /etc/leansignal-agent/config.yaml > c.yaml
+  leanctl agent config get my-agent --path /etc/leansignal-agent/config.yaml > c.yaml
   $EDITOR c.yaml
-  leanctl agent config apply lsh --file c.yaml`,
+  leanctl agent config apply my-agent --file c.yaml`,
 	}
 
 	cmd.AddCommand(newAgentConfigGetCommand(f), newAgentConfigApplyCommand(f))
@@ -56,8 +56,8 @@ to redirect into an editor.
 
 Values are unresolved: ${env:...} and ${leansignal:...} references are shown as
 written, so nothing the config merely references is exposed.`,
-		Example: `  leanctl agent config get lsh
-  leanctl agent config get lsh --path /etc/leansignal-agent/config.yaml > c.yaml`,
+		Example: `  leanctl agent config get my-agent
+  leanctl agent config get my-agent --path /etc/leansignal-agent/config.yaml > c.yaml`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := cmdContext(cmd)
@@ -151,8 +151,8 @@ changes nothing on the host and exits 5 with the validator's reason.
 
 --path selects which source to write and must be one of the paths from
 'agent config get'; omitted, it writes that command's default target.`,
-		Example: `  leanctl agent config apply lsh --file c.yaml
-  leanctl agent config apply lsh -f c.yaml --path /etc/leansignal-agent/config.yaml`,
+		Example: `  leanctl agent config apply my-agent --file c.yaml
+  leanctl agent config apply my-agent -f c.yaml --path /etc/leansignal-agent/config.yaml`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := cmdContext(cmd)

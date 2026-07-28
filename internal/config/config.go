@@ -2,11 +2,11 @@
 //
 // The config file is a kubectl-style set of named contexts, one per tenant:
 //
-//	current_context: petkopuma
+//	current_context: acme
 //	contexts:
-//	  petkopuma:
-//	    tenant: petkopuma
-//	    api_url: https://petkopuma-api.eu11.leansignal.io
+//	  acme:
+//	    tenant: acme
+//	    api_url: https://acme-api.eu11.leansignal.io
 //	    token: lsp_…
 //
 // It holds a bearer token, so it is written 0600 inside a 0700 directory and

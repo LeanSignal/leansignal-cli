@@ -48,7 +48,7 @@ select one for a single command with the global --context flag.`,
 
 			return p.Emit(mustJSON(file), func() (*output.Table, error) {
 				t := output.NewTable("CURRENT", "NAME", "TENANT", "API", "USER", "ROLE")
-				t.Empty = "No contexts. Run 'leanctl auth login --tenant <tenant>'."
+				t.Empty = "No contexts. Run 'leanctl auth login --api-url <tenant-api-url>'."
 				t.IDColumn = 1
 
 				for _, name := range names {

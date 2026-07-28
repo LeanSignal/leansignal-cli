@@ -57,8 +57,8 @@ and you only supply it once — it is stored in the context.
 The token is read from a no-echo prompt by default. In CI, either pipe it in
 with --token-stdin or skip login entirely and set LEANCTL_TOKEN together with
 LEANCTL_API_URL.`,
-		Example: `  leanctl auth login --api-url https://petkopuma-api.eu11.leansignal.io
-  cat token.txt | leanctl auth login --api-url https://petkopuma-api.eu11.leansignal.io --token-stdin
+		Example: `  leanctl auth login --api-url https://acme-api.eu11.leansignal.io
+  cat token.txt | leanctl auth login --api-url https://acme-api.eu11.leansignal.io --token-stdin
   leanctl auth login --api-url http://localhost:8080 --name dev`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -154,7 +154,7 @@ LEANCTL_API_URL.`,
 }
 
 // tenantFromAPIURL recovers the tenant slug from a host like
-// "petkopuma-api.eu11.leansignal.io". It is a convenience for naming the
+// "acme-api.eu11.leansignal.io". It is a convenience for naming the
 // context, never an authorization input — the server decides what the token
 // may do. An unrecognised host simply yields "", and --name covers that.
 func tenantFromAPIURL(apiURL string) string {
