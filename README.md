@@ -19,11 +19,6 @@ kubernetes     cluster + workloads      nikola@example.com    5d
 $ leanctl demand export host-metrics > demands/host-metrics.json
 ```
 
-> **Server support required.** The lean-api change that lets a personal access
-> token authenticate the REST API is described in
-> [`lean-api/docs/leanctl-design.md`](https://github.com/LeanSignal/lean-api/blob/main/docs/leanctl-design.md).
-> Until it ships, the token only authenticates the MCP listener.
-
 ## Install
 
 ### One-liner (macOS and Linux)
@@ -35,43 +30,19 @@ curl -fsSL https://raw.githubusercontent.com/LeanSignal/lean-cli/main/scripts/in
 Detects your OS and architecture, downloads the matching release, verifies its
 checksum, and installs to `/usr/local/bin` — or `~/.local/bin` when that is not
 writable, so it never demands `sudo`. Options: `--version vX.Y.Z`,
-`--bin-dir DIR`, `--no-verify`.
-
-> **Two things must be true before that line works, and neither is yet:**
->
-> 1. **A release must exist.** No `v*` tag has been cut, so there is nothing to
->    download. Build from source until then.
-> 2. **The assets must be publicly readable.** The repository is private, so
->    both `raw.githubusercontent.com` and the release assets currently require a
->    GitHub credential. The script handles that — it uses the `gh` CLI when you
->    are logged in, or `GH_TOKEN` — but a *public* one-liner needs the repo to be
->    public (as `leansignal-agent` is) or the assets mirrored to a public host.
->
-> Authenticated form, which works as soon as a release exists:
->
-> ```bash
-> export GH_TOKEN=…   # or: gh auth login
-> curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
->   https://raw.githubusercontent.com/LeanSignal/lean-cli/main/scripts/install.sh | sh
-> ```
+`--bin-dir DIR`, `--no-verify`. Review the script before piping it to a shell.
 
 ### Manual download
 
 Releases carry `leanctl_<version>_<os>_<arch>.tar.gz` for `darwin` and `linux`,
 `amd64` and `arm64`.
 
-Because the repo is private, release assets need authentication — a plain `curl`
-of the download URL returns 404, which reads like a missing file rather than an
-auth failure. Use the GitHub CLI, logged in as a member of the LeanSignal org:
-
 ```bash
 # macOS (Apple Silicon: arm64; Intel: amd64) — check with `uname -m`
-gh release download --repo LeanSignal/lean-cli \
-  --pattern 'leanctl_*_darwin_arm64.tar.gz'
+curl -fsSLO https://github.com/LeanSignal/lean-cli/releases/latest/download/leanctl_0.8.0_darwin_arm64.tar.gz
 
 # Linux
-gh release download --repo LeanSignal/lean-cli \
-  --pattern 'leanctl_*_linux_amd64.tar.gz'
+curl -fsSLO https://github.com/LeanSignal/lean-cli/releases/latest/download/leanctl_0.8.0_linux_amd64.tar.gz
 
 tar -xzf leanctl_*.tar.gz
 sudo install -m 0755 leanctl /usr/local/bin/leanctl
@@ -82,16 +53,16 @@ Without `sudo`, put it anywhere on your `PATH` instead:
 `install -m 0755 leanctl ~/.local/bin/leanctl`.
 
 **macOS:** the binaries are signed but not notarized, so a build fetched through
-a browser is quarantined and Gatekeeper will refuse it. `gh release download`
-does not set that flag; if you did download it another way, clear it with
+a browser is quarantined and Gatekeeper will refuse it. `curl` does not set that
+flag; if you did download it another way, clear it with
 `xattr -d com.apple.quarantine leanctl`.
 
 **Verifying the download** (optional). Checksums are signed with cosign
 keylessly, so no key is needed:
 
 ```bash
-gh release download --repo LeanSignal/lean-cli \
-  --pattern 'checksums.txt*' --pattern 'leanctl_*_darwin_arm64.tar.gz'
+base=https://github.com/LeanSignal/lean-cli/releases/latest/download
+curl -fsSLO $base/checksums.txt -O $base/checksums.txt.sig -O $base/checksums.txt.pem
 
 shasum -a 256 -c checksums.txt --ignore-missing   # `sha256sum -c` on Linux
 
@@ -103,10 +74,10 @@ cosign verify-blob checksums.txt \
 
 ### From source
 
-Needs Go 1.25+ and, for SSH cloning, org access.
+Needs Go 1.25+.
 
 ```bash
-git clone git@github.com:LeanSignal/lean-cli.git
+git clone https://github.com/LeanSignal/lean-cli.git
 cd lean-cli
 make install          # -> $GOBIN, or $(go env GOPATH)/bin
 leanctl version

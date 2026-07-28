@@ -10,20 +10,16 @@
 
 ## Server-side dependency
 
-The design that this CLI implements the client half of lives in
-**`../lean-api/docs/leanctl-design.md`**. The relevant part: lean-api's public API
-is session-cookie-authenticated today, and both auth layers
-(`apimiddleware.RequireSession` and the per-route `guard.*` middleware) read the
-cookie directly. Until the server-side `TokenAuth` middleware lands, an `lsp_`
-token authenticates only the `:8081` MCP listener, not `/api/v1/*` — **so nothing
-here works end to end yet.**
+The design this CLI implements the client half of lives in
+**`../lean-api/docs/leanctl-design.md`**. The server half — the `TokenAuth`
+middleware that turns an `lsp_` bearer into the session the guard layers expect
+— **shipped in lean-api 0.6.59** (`internal/api/middleware/tokenauth.go`,
+verification shared with the MCP listener via `ai.ResolveToken`). The whole
+chain works end to end against a deployed tenant.
 
-The remaining server work is small, because the MCP write-scope work (also
-2026-07-27) already built the hard parts: `ai.Identity` in context, the scope
-vocabulary, and `ai.Registry.bridge`, which mints a short-lived signed session
-from a PAT and replays the request through the real v1 router. The CLI
-middleware is that same trick applied to real inbound HTTP. See §2.1 of the
-design doc before touching anything on the server side.
+Two server-side properties this client leans on: token failures answer
+`invalid_token` with no `login_url`, and the synthesized session carries an
+empty `SessionID` plus a `" (CLI)"` display-name suffix for audit attribution.
 
 Consequences the CLI already encodes:
 

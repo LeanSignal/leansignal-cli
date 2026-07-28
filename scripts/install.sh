@@ -4,13 +4,8 @@
 # Quick start:
 #   curl -fsSL https://raw.githubusercontent.com/LeanSignal/lean-cli/main/scripts/install.sh | sh
 #
-# While the repository is PRIVATE, both that URL and the release assets need a
-# GitHub credential. Either export a token with repo read access:
-#   export GH_TOKEN=ghp_…
-#   curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
-#     https://raw.githubusercontent.com/LeanSignal/lean-cli/main/scripts/install.sh | sh
-# …or, if the GitHub CLI is installed and logged in, this script uses it
-# automatically and no token is needed.
+# No credential is needed. GH_TOKEN / a logged-in `gh` CLI are honoured when
+# present (useful against a private fork), never required.
 #
 # Options (flags or environment):
 #   --version vX.Y.Z   VERSION    release to install (default: latest)
@@ -52,7 +47,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     -h | --help)
-      sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *) err "unknown option: $1 (try --help)" ;;
@@ -108,12 +103,9 @@ if [ "$VERSION" = "latest" ]; then
   fi
 
   [ -n "$VERSION" ] || err "could not resolve the latest release of $REPO.
-  If the repository is private, authenticate first:
-    export GH_TOKEN=…            (a token with repo read access)
-  or install and log in to the GitHub CLI:
-    gh auth login
-  If no release exists yet, build from source instead:
-    git clone git@github.com:$REPO.git && cd lean-cli && make install"
+  Check your network, or pass --version vX.Y.Z explicitly. To build from
+  source instead:
+    git clone https://github.com/$REPO.git && cd lean-cli && make install"
 fi
 
 # Release archives are named by goreleaser as
@@ -142,9 +134,7 @@ else
     # the Authorization header across that hop by design — which is what we
     # want, since forwarding it makes the storage host reject the request.
     curl -fsSL -H "Authorization: Bearer $TOKEN" -o "$tmp/$archive" "$url" ||
-      err "download failed: $url
-  For a private repository, install the GitHub CLI and run 'gh auth login' —
-  it handles private release assets correctly."
+      err "download failed: $url"
   else
     curl -fsSL -o "$tmp/$archive" "$url" || err "download failed: $url"
   fi
